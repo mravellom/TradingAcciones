@@ -1,0 +1,149 @@
+.dashboard {
+  max-width: 1200px;
+}
+
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  margin-bottom: 20px;
+  font-size: 13px;
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #8b949e;
+
+    &.healthy { background: #3fb950; }
+    &.halted  { background: #f85149; }
+  }
+
+  .ws-status {
+    margin-left: auto;
+    color: #8b949e;
+  }
+}
+
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.section {
+  margin-bottom: 24px;
+
+  h3 {
+    font-size: 14px;
+    color: #8b949e;
+    margin: 0 0 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .empty {
+    color: #484f58;
+    font-size: 13px;
+    text-align: center;
+    padding: 20px;
+  }
+}
+
+.approval-section {
+  .approval-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    border-color: #d29922;
+
+    .approval-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 13px;
+    }
+
+    .approval-actions {
+      display: flex;
+      gap: 8px;
+    }
+  }
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+
+  .summary-item {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 12px;
+
+    .label {
+      display: block;
+      font-size: 11px;
+      color: #8b949e;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .value {
+      font-size: 18px;
+      font-weight: 600;
+    }
+  }
+}
+
+.pnl-chart {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 12px;
+
+  .pnl-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+    font-size: 12px;
+  }
+
+  .pnl-date {
+    width: 80px;
+    color: #8b949e;
+    flex-shrink: 0;
+  }
+
+  .pnl-bar-container {
+    flex: 1;
+    height: 16px;
+    background: #21262d;
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .pnl-bar {
+    display: block;
+    height: 100%;
+    border-radius: 3px;
+    min-width: 2px;
+    transition: width 0.3s;
+    &.positive { background: #238636; }
+    &.negative { background: #da3633; }
+  }
+
+  .pnl-value {
+    width: 90px;
+    text-align: right;
+    flex-shrink: 0;
+    font-family: monospace;
+  }
+}

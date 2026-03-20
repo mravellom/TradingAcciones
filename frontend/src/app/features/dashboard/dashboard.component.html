@@ -1,0 +1,231 @@
+<div class="dashboard">
+  <!-- System Status Bar -->
+  <div class="status-bar" *ngIf="health">
+    <span class="status-dot" [class.healthy]="health.system_status === 'RUNNING'"
+          [class.halted]="health.system_status === 'HALTED'"></span>
+    <span>System: {{ health.system_status }}</span>
+    <span class="ws-status">
+      WS: {{ ws.connected ? 'Connected' : 'Disconnected' }}
+    </span>
+  </div>
+
+  <!-- Portfolio Cards -->
+  <div class="cards-grid" *ngIf="portfolio">
+    <div class="card">
+      <div class="card-header">Total Balance</div>
+      <div class="card-value">$ {{ formatUsd(portfolio.total_balance) }}</div>
+    </div>
+    <div class="card">
+      <div class="card-header">Available</div>
+      <div class="card-value">$ {{ formatUsd(portfolio.available_balance) }}</div>
+    </div>
+    <div class="card">
+      <div class="card-header">Daily P&L</div>
+      <div class="card-value" [class]="getPnlClass(portfolio.daily_pnl)">
+        $ {{ formatUsd(portfolio.daily_pnl) }}
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">Total P&L</div>
+      <div class="card-value" [class]="getPnlClass(portfolio.total_pnl)">
+        $ {{ formatUsd(portfolio.total_pnl) }}
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">Win Rate</div>
+      <div class="card-value">{{ (winRate * 100).toFixed(1) }}%</div>
+    </div>
+    <div class="card">
+      <div class="card-header">Max Drawdown</div>
+      <div class="card-value negative">{{ formatPercent(portfolio.max_drawdown) }}</div>
+    </div>
+  </div>
+
+  <!-- Pending Approvals -->
+  <div class="section approval-section" *ngIf="pendingApprovals.length > 0">
+    <h3>Pending Approvals ({{ pendingApprovals.length }})</h3>
+    <div class="approval-card card" *ngFor="let order of pendingApprovals">
+      <div class="approval-info">
+        <span class="badge badge-buy">{{ order.side }}</span>
+        <strong>{{ order.symbol }}</strong>
+        <span>Qty: {{ order.requested_qty }}</span>
+        <span>Price: {{ formatUsd(order.requested_price) }}</span>
+        <span>SL: {{ formatUsd(order.stop_loss) }}</span>
+        <span>TP: {{ formatUsd(order.take_profit) }}</span>
+      </div>
+      <div class="approval-actions">
+        <button class="btn btn-primary" (click)="approveOrder(order.id)">Approve</button>
+        <button class="btn btn-danger" (click)="rejectOrder(order.id)">Reject</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Open Positions -->
+  <div class="section">
+    <h3>Open Positions ({{ openPositions.length }})</h3>
+    <table class="data-table" *ngIf="openPositions.length > 0">
+      <thead>
+        <tr>
+          <th>Symbol</th>
+          <th>Entry</th>
+          <th>Current</th>
+          <th>Qty</th>
+          <th>SL</th>
+          <th>TP</th>
+          <th>P&L</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let pos of openPositions">
+          <td><strong>{{ pos.symbol }}</strong></td>
+          <td>{{ formatUsd(pos.entry_price) }}</td>
+          <td>{{ formatUsd(pos.current_price) }}</td>
+          <td>{{ pos.quantity }}</td>
+          <td>{{ formatUsd(pos.stop_loss) }}</td>
+          <td>{{ formatUsd(pos.take_profit) }}</td>
+          <td [class]="getPnlClass(pos.unrealized_pnl)">
+            $ {{ formatUsd(pos.unrealized_pnl) }}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="empty" *ngIf="openPositions.length === 0">No open positions</p>
+  </div>
+
+  <!-- Recent Trades -->
+  <div class="section">
+    <h3>Recent Trades</h3>
+    <table class="data-table" *ngIf="recentTrades.length > 0">
+      <thead>
+        <tr>
+          <th>Symbol</th>
+          <th>Entry</th>
+          <th>Exit</th>
+          <th>P&L</th>
+          <th>P&L %</th>
+          <th>Duration</th>
+          <th>Closed</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let trade of recentTrades">
+          <td><strong>{{ trade.symbol }}</strong></td>
+          <td>{{ formatUsd(trade.entry_price) }}</td>
+          <td>{{ formatUsd(trade.exit_price) }}</td>
+          <td [class]="getPnlClass(trade.pnl)">$ {{ formatUsd(trade.pnl) }}</td>
+          <td [class]="getPnlClass(trade.pnl_percent)">{{ formatPercent(trade.pnl_percent) }}</td>
+          <td>{{ trade.duration_seconds }}s</td>
+          <td>{{ trade.closed_at | date:'short' }}</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="empty" *ngIf="recentTrades.length === 0">No trades yet</p>
+  </div>
+
+  <!-- Recent Signals -->
+  <div class="section">
+    <h3>Recent Signals</h3>
+    <table class="data-table" *ngIf="recentSignals.length > 0">
+      <thead>
+        <tr>
+          <th>Symbol</th>
+          <th>Type</th>
+          <th>Confidence</th>
+          <th>Entry</th>
+          <th>SL</th>
+          <th>TP</th>
+          <th>Time</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let sig of recentSignals">
+          <td><strong>{{ sig.symbol }}</strong></td>
+          <td>
+            <span class="badge" [class.badge-buy]="sig.signal_type === 'BUY'"
+                  [class.badge-sell]="sig.signal_type === 'SELL'">
+              {{ sig.signal_type }}
+            </span>
+          </td>
+          <td>{{ formatPercent(sig.confidence) }}</td>
+          <td>{{ formatUsd(sig.entry_price) }}</td>
+          <td>{{ formatUsd(sig.stop_loss) }}</td>
+          <td>{{ formatUsd(sig.take_profit) }}</td>
+          <td>{{ sig.created_at | date:'short' }}</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="empty" *ngIf="recentSignals.length === 0">No signals yet</p>
+  </div>
+
+  <!-- Trading Summary -->
+  <div class="section" *ngIf="summary">
+    <h3>Trading Summary</h3>
+    <div class="summary-grid">
+      <div class="summary-item">
+        <span class="label">Total Trades</span>
+        <span class="value">{{ summary.total_trades }}</span>
+      </div>
+      <div class="summary-item">
+        <span class="label">Wins / Losses</span>
+        <span class="value">{{ summary.wins }} / {{ summary.losses }}</span>
+      </div>
+      <div class="summary-item">
+        <span class="label">Avg Return</span>
+        <span class="value">{{ summary.avg_return }}%</span>
+      </div>
+      <div class="summary-item">
+        <span class="label">Avg Duration</span>
+        <span class="value">{{ summary.avg_duration_seconds }}s</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Per-Strategy Performance -->
+  <div class="section" *ngIf="strategyPerf.length > 0">
+    <h3>Strategy Performance</h3>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Strategy</th>
+          <th>Trades</th>
+          <th>Win Rate</th>
+          <th>Total P&L</th>
+          <th>Avg P&L</th>
+          <th>Best</th>
+          <th>Worst</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let sp of strategyPerf">
+          <td>{{ sp.strategy_id.substring(0, 8) }}...</td>
+          <td>{{ sp.total_trades }}</td>
+          <td>{{ (sp.win_rate * 100).toFixed(1) }}%</td>
+          <td [class]="getPnlClass(sp.total_pnl)">$ {{ sp.total_pnl }}</td>
+          <td>$ {{ sp.avg_pnl }}</td>
+          <td class="positive">$ {{ sp.best_trade }}</td>
+          <td class="negative">$ {{ sp.worst_trade }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Cumulative PnL -->
+  <div class="section" *ngIf="pnlData.length > 0">
+    <h3>Cumulative P&L (30d)</h3>
+    <div class="pnl-chart">
+      <div class="pnl-row" *ngFor="let d of pnlData">
+        <span class="pnl-date">{{ d.date }}</span>
+        <span class="pnl-bar-container">
+          <span class="pnl-bar"
+                [class.positive]="d.cumulative_pnl >= 0"
+                [class.negative]="d.cumulative_pnl < 0"
+                [style.width.%]="getPnlBarWidth(d.cumulative_pnl)">
+          </span>
+        </span>
+        <span class="pnl-value" [class]="getPnlClass(d.cumulative_pnl)">
+          $ {{ d.cumulative_pnl }}
+        </span>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,25 @@
+<div class="app-layout">
+  <nav class="sidebar">
+    <div class="logo">
+      <h2>Trading Platform</h2>
+      <span class="mode-badge">PAPER</span>
+    </div>
+    <ul class="nav-links">
+      <li>
+        <a routerLink="/dashboard" routerLinkActive="active">Dashboard</a>
+      </li>
+      <li>
+        <a routerLink="/trades" routerLinkActive="active">Trades</a>
+      </li>
+      <li>
+        <a routerLink="/strategies" routerLinkActive="active">Strategies</a>
+      </li>
+      <li>
+        <a routerLink="/risk" routerLinkActive="active">Risk Panel</a>
+      </li>
+    </ul>
+  </nav>
+  <main class="content">
+    <router-outlet />
+  </main>
+</div>

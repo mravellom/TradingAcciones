@@ -1,0 +1,108 @@
+<div class="strategies-page">
+  <div class="page-header">
+    <h2>Strategies</h2>
+    <button class="btn btn-primary" (click)="showCreateForm = !showCreateForm">
+      {{ showCreateForm ? 'Cancel' : '+ New Strategy' }}
+    </button>
+  </div>
+
+  <!-- Create Form -->
+  <div class="create-form card" *ngIf="showCreateForm">
+    <h3>New Strategy</h3>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Name</label>
+        <input [(ngModel)]="newStrategy.name" placeholder="my_strategy" />
+      </div>
+      <div class="form-group">
+        <label>Type</label>
+        <select [(ngModel)]="newStrategy.strategy_type">
+          <option value="momentum">Momentum</option>
+          <option value="mean_reversion">Mean Reversion</option>
+          <option value="breakout">Breakout</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Symbols (comma separated)</label>
+        <input [(ngModel)]="newStrategy.symbols" placeholder="BTCUSDT,ETHUSDT" />
+      </div>
+      <div class="form-group">
+        <label>Timeframe</label>
+        <select [(ngModel)]="newStrategy.timeframe">
+          <option value="5m">5m</option>
+          <option value="15m">15m</option>
+          <option value="1h">1h</option>
+          <option value="4h">4h</option>
+          <option value="1d">1d</option>
+        </select>
+      </div>
+      <div class="form-group full-width">
+        <label>Description</label>
+        <input [(ngModel)]="newStrategy.description" placeholder="Strategy description..." />
+      </div>
+      <div class="form-group full-width">
+        <label>Parameters (JSON)</label>
+        <textarea [(ngModel)]="newStrategy.parameters" rows="3"></textarea>
+      </div>
+    </div>
+    <button class="btn btn-primary" (click)="createStrategy()" [disabled]="!newStrategy.name">
+      Create
+    </button>
+  </div>
+
+  <!-- Strategy Cards -->
+  <div class="strategy-list">
+    <div class="strategy-card card" *ngFor="let s of strategies">
+      <div class="strategy-header">
+        <div>
+          <h3>{{ s.name }}</h3>
+          <span class="type-badge">{{ s.strategy_type }}</span>
+          <span class="version">v{{ s.version }}</span>
+        </div>
+        <div class="toggle-switch" (click)="toggleActive(s)">
+          <span class="toggle" [class.active]="s.is_active">
+            {{ s.is_active ? 'ACTIVE' : 'INACTIVE' }}
+          </span>
+        </div>
+      </div>
+
+      <p class="description" *ngIf="s.description">{{ s.description }}</p>
+
+      <div class="strategy-meta">
+        <span>Symbols: <strong>{{ s.symbols.join(', ') }}</strong></span>
+        <span>Timeframe: <strong>{{ s.timeframe }}</strong></span>
+      </div>
+
+      <div class="strategy-params" *ngIf="s.parameters && (s.parameters | keyvalue).length > 0">
+        <span class="param" *ngFor="let p of s.parameters | keyvalue">
+          {{ p.key }}: {{ p.value }}
+        </span>
+      </div>
+
+      <!-- Performance -->
+      <div class="strategy-perf" *ngIf="getPerf(s.id) as perf">
+        <div class="perf-item">
+          <span class="perf-label">Trades</span>
+          <span class="perf-value">{{ perf.total_trades }}</span>
+        </div>
+        <div class="perf-item">
+          <span class="perf-label">Win Rate</span>
+          <span class="perf-value">{{ formatPercent(perf.win_rate) }}</span>
+        </div>
+        <div class="perf-item">
+          <span class="perf-label">Total P&L</span>
+          <span class="perf-value" [class.positive]="perf.total_pnl > 0"
+                [class.negative]="perf.total_pnl < 0">
+            $ {{ perf.total_pnl }}
+          </span>
+        </div>
+        <div class="perf-item">
+          <span class="perf-label">Avg Return</span>
+          <span class="perf-value">{{ perf.avg_pnl_percent }}%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="empty" *ngIf="strategies.length === 0">No strategies configured</p>
+</div>

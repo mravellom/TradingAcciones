@@ -1,0 +1,84 @@
+<div class="trades-page">
+  <div class="tabs">
+    <button class="tab" [class.active]="activeTab === 'trades'" (click)="activeTab = 'trades'">
+      Trades ({{ trades.length }})
+    </button>
+    <button class="tab" [class.active]="activeTab === 'orders'" (click)="activeTab = 'orders'">
+      Orders ({{ orders.length }})
+    </button>
+    <span class="win-rate" *ngIf="activeTab === 'trades'">
+      Win Rate: {{ (winRate * 100).toFixed(1) }}%
+    </span>
+  </div>
+
+  <!-- Trades Table -->
+  <div *ngIf="activeTab === 'trades'">
+    <table class="data-table" *ngIf="trades.length > 0">
+      <thead>
+        <tr>
+          <th>Symbol</th>
+          <th>Entry</th>
+          <th>Exit</th>
+          <th>Qty</th>
+          <th>P&L</th>
+          <th>P&L %</th>
+          <th>Confidence</th>
+          <th>Duration</th>
+          <th>Closed</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let t of trades">
+          <td><strong>{{ t.symbol }}</strong></td>
+          <td>{{ formatUsd(t.entry_price) }}</td>
+          <td>{{ formatUsd(t.exit_price) }}</td>
+          <td>{{ t.quantity }}</td>
+          <td [class]="getPnlClass(t.pnl)">$ {{ formatUsd(t.pnl) }}</td>
+          <td [class]="getPnlClass(t.pnl_percent)">{{ formatPercent(t.pnl_percent) }}</td>
+          <td>{{ formatPercent(t.signal_confidence) }}</td>
+          <td>{{ t.duration_seconds }}s</td>
+          <td>{{ t.closed_at | date:'short' }}</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="empty" *ngIf="trades.length === 0">No trades yet</p>
+  </div>
+
+  <!-- Orders Table -->
+  <div *ngIf="activeTab === 'orders'">
+    <table class="data-table" *ngIf="orders.length > 0">
+      <thead>
+        <tr>
+          <th>Symbol</th>
+          <th>Side</th>
+          <th>Type</th>
+          <th>Status</th>
+          <th>Qty</th>
+          <th>Filled</th>
+          <th>Price</th>
+          <th>Fill Price</th>
+          <th>Mode</th>
+          <th>Created</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let o of orders">
+          <td><strong>{{ o.symbol }}</strong></td>
+          <td>
+            <span class="badge" [class.badge-buy]="o.side === 'BUY'"
+                  [class.badge-sell]="o.side === 'SELL'">{{ o.side }}</span>
+          </td>
+          <td>{{ o.order_type }}</td>
+          <td><span class="badge" [class]="getStatusClass(o.status)">{{ o.status }}</span></td>
+          <td>{{ o.requested_qty }}</td>
+          <td>{{ o.filled_qty }}</td>
+          <td>{{ formatUsd(o.requested_price) }}</td>
+          <td>{{ o.avg_fill_price ? formatUsd(o.avg_fill_price) : '-' }}</td>
+          <td>{{ o.execution_mode }}</td>
+          <td>{{ o.created_at | date:'short' }}</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="empty" *ngIf="orders.length === 0">No orders yet</p>
+  </div>
+</div>

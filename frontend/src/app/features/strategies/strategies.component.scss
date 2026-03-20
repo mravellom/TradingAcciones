@@ -1,0 +1,146 @@
+.strategies-page {
+  max-width: 1000px;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+
+  h2 { margin: 0; font-size: 18px; }
+}
+
+.create-form {
+  margin-bottom: 20px;
+  h3 { margin: 0 0 16px; font-size: 14px; color: #8b949e; }
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .full-width { grid-column: 1 / -1; }
+
+  .form-group {
+    label {
+      display: block;
+      font-size: 12px;
+      color: #8b949e;
+      margin-bottom: 4px;
+    }
+    input, select, textarea {
+      width: 100%;
+      padding: 8px 10px;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      color: #e1e4e8;
+      font-size: 13px;
+      font-family: inherit;
+      &:focus { border-color: #58a6ff; outline: none; }
+    }
+  }
+}
+
+.strategy-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.strategy-card {
+  .strategy-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 8px;
+
+    h3 { margin: 0; font-size: 16px; display: inline; }
+    .type-badge {
+      margin-left: 8px;
+      font-size: 11px;
+      background: rgba(88, 166, 255, 0.15);
+      color: #58a6ff;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .version {
+      margin-left: 6px;
+      font-size: 11px;
+      color: #484f58;
+    }
+  }
+
+  .toggle {
+    padding: 4px 12px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    background: rgba(139, 148, 158, 0.2);
+    color: #8b949e;
+
+    &.active {
+      background: rgba(63, 185, 80, 0.2);
+      color: #3fb950;
+    }
+  }
+
+  .description {
+    font-size: 13px;
+    color: #8b949e;
+    margin: 0 0 8px;
+  }
+
+  .strategy-meta {
+    display: flex;
+    gap: 20px;
+    font-size: 12px;
+    color: #8b949e;
+    margin-bottom: 8px;
+  }
+
+  .strategy-params {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 12px;
+
+    .param {
+      background: #0d1117;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      color: #8b949e;
+      font-family: monospace;
+    }
+  }
+
+  .strategy-perf {
+    display: flex;
+    gap: 20px;
+    padding-top: 10px;
+    border-top: 1px solid #30363d;
+
+    .perf-item {
+      .perf-label {
+        font-size: 11px;
+        color: #484f58;
+        display: block;
+      }
+      .perf-value {
+        font-size: 14px;
+        font-weight: 600;
+      }
+    }
+  }
+}
+
+.empty {
+  color: #484f58;
+  text-align: center;
+  padding: 40px;
+}

@@ -1,0 +1,47 @@
+{
+  "symbol": "ETHUSDT",
+  "model_type": "xgboost",
+  "threshold": 0.6900000000000003,
+  "features": [
+    "rsi_7",
+    "rsi_14",
+    "macd_histogram",
+    "macd_cross",
+    "stoch_k",
+    "sma_ratio",
+    "ema_ratio",
+    "adx",
+    "price_vs_sma50",
+    "atr_norm",
+    "bb_width",
+    "rolling_vol",
+    "rel_volume",
+    "obv_slope",
+    "vol_price_corr",
+    "return_1h",
+    "return_4h",
+    "return_24h",
+    "dd_from_high",
+    "hour_sin",
+    "hour_cos",
+    "dow_sin",
+    "dow_cos"
+  ],
+  "label_config": {
+    "tp_pct": 0.015,
+    "sl_pct": 0.01,
+    "horizon_bars": 24
+  },
+  "class_weight": 1.469176351692774,
+  "vol_filter_percentile": 50,
+  "train_samples": 19546,
+  "train_date_range": "2020-01-03 01:00:00+00:00 to 2025-08-29 01:00:00+00:00",
+  "tune_metrics": {
+    "win_rate": 0.4473684210526316,
+    "profit_factor": 1.214285714285714,
+    "sharpe_ratio": 1.4272751864905213,
+    "expectancy": 0.0011842105263157885,
+    "total_trades": 38
+  },
+  "trained_at": "2026-03-20T17:54:35.390490+00:00"
+}

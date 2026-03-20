@@ -1,0 +1,101 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background: #0f1117;
+  color: #e1e4e8;
+}
+
+// Shared card styles
+.card {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.card-header {
+  font-size: 12px;
+  color: #8b949e;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.card-value {
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.positive { color: #3fb950; }
+.negative { color: #f85149; }
+.neutral  { color: #8b949e; }
+
+// Table styles
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+
+  th, td {
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 1px solid #30363d;
+    font-size: 13px;
+  }
+
+  th {
+    color: #8b949e;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+  }
+
+  tr:hover td {
+    background: rgba(255, 255, 255, 0.03);
+  }
+}
+
+// Badge styles
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.badge-buy  { background: rgba(63, 185, 80, 0.2); color: #3fb950; }
+.badge-sell { background: rgba(248, 81, 73, 0.2); color: #f85149; }
+.badge-open { background: rgba(88, 166, 255, 0.2); color: #58a6ff; }
+.badge-closed { background: rgba(139, 148, 158, 0.2); color: #8b949e; }
+
+// Button
+.btn {
+  padding: 8px 16px;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  background: #21262d;
+  color: #e1e4e8;
+  cursor: pointer;
+  font-size: 13px;
+
+  &:hover {
+    background: #30363d;
+  }
+
+  &.btn-danger {
+    background: #da3633;
+    border-color: #f85149;
+    &:hover { background: #f85149; }
+  }
+
+  &.btn-primary {
+    background: #1f6feb;
+    border-color: #58a6ff;
+    &:hover { background: #388bfd; }
+  }
+}

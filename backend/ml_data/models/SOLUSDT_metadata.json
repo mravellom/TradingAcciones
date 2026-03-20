@@ -1,0 +1,47 @@
+{
+  "symbol": "SOLUSDT",
+  "model_type": "xgboost",
+  "threshold": 0.5000000000000001,
+  "features": [
+    "rsi_7",
+    "rsi_14",
+    "macd_histogram",
+    "macd_cross",
+    "stoch_k",
+    "sma_ratio",
+    "ema_ratio",
+    "adx",
+    "price_vs_sma50",
+    "atr_norm",
+    "bb_width",
+    "rolling_vol",
+    "rel_volume",
+    "obv_slope",
+    "vol_price_corr",
+    "return_1h",
+    "return_4h",
+    "return_24h",
+    "dd_from_high",
+    "hour_sin",
+    "hour_cos",
+    "dow_sin",
+    "dow_cos"
+  ],
+  "label_config": {
+    "tp_pct": 0.015,
+    "sl_pct": 0.01,
+    "horizon_bars": 24
+  },
+  "class_weight": 1.3021218610083707,
+  "vol_filter_percentile": 50,
+  "train_samples": 11826,
+  "train_date_range": "2020-08-13 07:00:00+00:00 to 2025-04-09 11:00:00+00:00",
+  "tune_metrics": {
+    "win_rate": 0.44045368620037806,
+    "profit_factor": 1.1807432432432436,
+    "sharpe_ratio": 0.3312861651078679,
+    "expectancy": 0.0010113421550094533,
+    "total_trades": 529
+  },
+  "trained_at": "2026-03-20T17:54:36.353460+00:00"
+}

@@ -1,0 +1,53 @@
+.risk-panel {
+  max-width: 1000px;
+
+  h2 {
+    font-size: 18px;
+    margin: 0 0 20px;
+  }
+}
+
+.section {
+  margin-bottom: 24px;
+
+  h3 {
+    font-size: 14px;
+    color: #8b949e;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 0 0 12px;
+  }
+}
+
+.control-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+}
+
+.system-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+
+  .status-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #8b949e;
+
+    &.running { background: #3fb950; box-shadow: 0 0 8px rgba(63, 185, 80, 0.4); }
+    &.halted  { background: #f85149; box-shadow: 0 0 8px rgba(248, 81, 73, 0.4); }
+  }
+}
+
+.risk-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}

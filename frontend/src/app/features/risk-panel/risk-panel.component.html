@@ -1,0 +1,84 @@
+<div class="risk-panel">
+  <h2>Risk Management</h2>
+
+  <!-- System Controls -->
+  <div class="section">
+    <h3>System Control</h3>
+    <div class="control-row">
+      <div class="system-status" *ngIf="health">
+        <span class="status-indicator"
+              [class.running]="health.system_status === 'RUNNING'"
+              [class.halted]="health.system_status === 'HALTED'">
+        </span>
+        <strong>{{ health.system_status }}</strong>
+      </div>
+      <div class="control-actions">
+        <button class="btn btn-danger" (click)="haltSystem()"
+                *ngIf="health?.system_status === 'RUNNING'">
+          HALT SYSTEM
+        </button>
+        <button class="btn btn-primary" (click)="resumeSystem()"
+                *ngIf="health?.system_status === 'HALTED'">
+          RESUME SYSTEM
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Risk Status -->
+  <div class="section" *ngIf="riskStatus">
+    <h3>Risk Status</h3>
+    <div class="risk-grid">
+      <div class="card">
+        <div class="card-header">Circuit Breaker</div>
+        <div class="card-value" [class.negative]="riskStatus.circuit_breaker_active"
+             [class.positive]="!riskStatus.circuit_breaker_active">
+          {{ riskStatus.circuit_breaker_active ? 'ACTIVE' : 'INACTIVE' }}
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header">Daily P&L</div>
+        <div class="card-value"
+             [class.negative]="riskStatus.daily_pnl < '0'"
+             [class.positive]="riskStatus.daily_pnl >= '0'">
+          $ {{ riskStatus.daily_pnl }}
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header">Daily Loss Limit</div>
+        <div class="card-value">{{ formatPercent(riskStatus.daily_loss_limit) }}</div>
+      </div>
+      <div class="card">
+        <div class="card-header">Open Positions</div>
+        <div class="card-value">
+          {{ riskStatus.open_positions }} / {{ riskStatus.max_positions }}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Health Checks -->
+  <div class="section" *ngIf="health">
+    <h3>Health Checks</h3>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Service</th>
+          <th>Status</th>
+          <th>Details</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let check of health.checks | keyvalue">
+          <td><strong>{{ check.key }}</strong></td>
+          <td>
+            <span class="badge" [class]="getCheckClass(check.value.status)">
+              {{ check.value.status }}
+            </span>
+          </td>
+          <td>{{ check.value.error || '-' }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>

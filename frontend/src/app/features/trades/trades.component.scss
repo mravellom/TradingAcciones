@@ -1,0 +1,41 @@
+.trades-page {
+  max-width: 1200px;
+}
+
+.tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid #30363d;
+  padding-bottom: 8px;
+
+  .tab {
+    background: none;
+    border: none;
+    color: #8b949e;
+    padding: 8px 16px;
+    cursor: pointer;
+    font-size: 14px;
+    border-radius: 6px 6px 0 0;
+
+    &:hover { color: #e1e4e8; }
+    &.active {
+      color: #58a6ff;
+      border-bottom: 2px solid #58a6ff;
+    }
+  }
+
+  .win-rate {
+    margin-left: auto;
+    font-size: 13px;
+    color: #8b949e;
+  }
+}
+
+.empty {
+  color: #484f58;
+  font-size: 13px;
+  text-align: center;
+  padding: 40px;
+}
