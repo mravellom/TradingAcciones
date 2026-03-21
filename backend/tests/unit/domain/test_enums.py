@@ -19,7 +19,7 @@ class TestEnums:
         assert SignalType.HOLD.value == "HOLD"
 
     def test_order_statuses(self):
-        assert len(OrderStatus) == 10
+        assert len(OrderStatus) == 11
         assert OrderStatus.PENDING.value == "PENDING"
         assert OrderStatus.FILLED.value == "FILLED"
 

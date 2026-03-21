@@ -20,7 +20,7 @@ from app.domain.enums import (
     OrderSide,
     OrderStatus,
 )
-from app.models.event_store import EventStore
+from app.models.event_store import Event
 from app.models.order import Order
 from app.pipeline.execution.base import BaseExecutor
 
@@ -56,14 +56,14 @@ async def _recover_circuit_breaker(session: AsyncSession) -> None:
 
     # Find most recent CB event
     stmt = (
-        select(EventStore)
+        select(Event)
         .where(
-            EventStore.event_type.in_([
+            Event.event_type.in_([
                 EventType.CIRCUIT_BREAKER_ACTIVATED.value,
                 EventType.CIRCUIT_BREAKER_RESET.value,
             ])
         )
-        .order_by(EventStore.created_at.desc())
+        .order_by(Event.created_at.desc())
         .limit(1)
     )
     result = await session.execute(stmt)

@@ -1,10 +1,4 @@
-"""Tests for notification dead-letter queue.
-
-Validates:
-- Failed Telegram send writes to Redis dead letter queue
-- Dead letter entries contain message, error, and timestamp
-- Dead letter queue is trimmed to last 100 entries
-"""
+"""Tests for notification dead-letter queue."""
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -20,7 +14,6 @@ async def test_failed_send_writes_to_dead_letter():
 
     notifier = TelegramNotifier(bot_token="fake-token", chat_id="12345")
 
-    # Mock httpx to raise an exception
     with patch("app.core.notifications.httpx.AsyncClient") as mock_client_cls:
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -28,23 +21,21 @@ async def test_failed_send_writes_to_dead_letter():
         mock_client.post.side_effect = ConnectionError("Network unreachable")
         mock_client_cls.return_value = mock_client
 
-        with patch("app.core.notifications.get_redis", return_value=mock_redis):
+        # Patch get_redis where it's imported from (inside _dead_letter method)
+        with patch("app.core.redis.get_redis", return_value=mock_redis):
             result = await notifier.send("Test alert message")
 
     assert result is False
 
-    # Verify dead letter was written to Redis
     mock_redis.lpush.assert_called_once()
     call_args = mock_redis.lpush.call_args
     assert call_args[0][0] == "notifications:dead_letter"
 
-    # Parse the stored JSON
     stored_data = json.loads(call_args[0][1])
     assert "Test alert message" in stored_data["message"]
     assert "Network unreachable" in stored_data["error"]
     assert "timestamp" in stored_data
 
-    # Verify trim to 100 entries
     mock_redis.ltrim.assert_called_once_with("notifications:dead_letter", 0, 99)
 
 
@@ -56,7 +47,7 @@ async def test_http_error_status_writes_to_dead_letter():
     notifier = TelegramNotifier(bot_token="fake-token", chat_id="12345")
 
     mock_response = MagicMock()
-    mock_response.status_code = 429  # Rate limited
+    mock_response.status_code = 429
     mock_response.text = "Too Many Requests"
 
     with patch("app.core.notifications.httpx.AsyncClient") as mock_client_cls:
@@ -66,7 +57,7 @@ async def test_http_error_status_writes_to_dead_letter():
         mock_client.post.return_value = mock_response
         mock_client_cls.return_value = mock_client
 
-        with patch("app.core.notifications.get_redis", return_value=mock_redis):
+        with patch("app.core.redis.get_redis", return_value=mock_redis):
             result = await notifier.send("Rate limited message")
 
     assert result is False
@@ -104,7 +95,7 @@ async def test_successful_send_does_not_write_dead_letter():
         mock_client.post.return_value = mock_response
         mock_client_cls.return_value = mock_client
 
-        with patch("app.core.notifications.get_redis", return_value=mock_redis):
+        with patch("app.core.redis.get_redis", return_value=mock_redis):
             result = await notifier.send("Success message")
 
     assert result is True
