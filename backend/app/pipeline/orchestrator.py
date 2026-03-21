@@ -37,6 +37,7 @@ from app.pipeline.strategy.base import TradeIntent
 from app.pipeline.trade_tracker.tracker import TradeTracker
 from app.repositories.event_repo import EventRepository
 from app.repositories.position_repo import PositionRepository
+from app.services.portfolio_service import PortfolioService
 
 logger = get_logger(__name__)
 
@@ -289,8 +290,8 @@ class TradingPipeline:
                         str(order.id), intent.symbol, intent.action.value,
                         str(quantity), str(intent.entry_price),
                     )
-                except Exception:
-                    pass
+                except Exception as notif_err:
+                    logger.error("notification_failed", order_id=str(order.id), error=str(notif_err))
 
                 return PipelineResult(
                     action="PENDING_APPROVAL",
@@ -305,7 +306,12 @@ class TradingPipeline:
 
             await self._tracker.record_order_submitted(order.id, correlation_id)
 
-            # 8. Execute (only if not pending approval)
+            # 8. Persist SUBMITTING state before sending to exchange.
+            # If the process crashes after Binance accepts but before we commit,
+            # the startup reconciler will find this order and reconcile.
+            order.status = OrderStatus.SUBMITTING.value
+            await self._session.flush()
+
             fill = await self._executor.submit(
                 order_id=order.id,
                 symbol=intent.symbol,
@@ -341,12 +347,36 @@ class TradingPipeline:
                 take_profit=intent.take_profit,
                 strategy_id=intent.strategy_id,
                 signal_confidence=intent.confidence,
+                execution_mode=self._executor.mode.value,
             )
 
-            # 11. Update portfolio atomically (already locked)
+            # 10b. Place exchange-level SL/TP for LIVE mode
+            if self._executor.mode == ExecutionMode.LIVE:
+                try:
+                    from app.pipeline.execution.binance_executor import BinanceExecutor
+                    if isinstance(self._executor, BinanceExecutor):
+                        oco_id = await self._executor.place_oco_order(
+                            symbol=intent.symbol,
+                            quantity=fill.quantity,
+                            stop_loss=intent.stop_loss,
+                            take_profit=intent.take_profit,
+                        )
+                        if oco_id:
+                            position.oco_order_id = oco_id
+                            await self._session.flush()
+                except Exception as oco_err:
+                    logger.error(
+                        "oco_placement_failed",
+                        position_id=str(position.id),
+                        error=str(oco_err),
+                    )
+
+            # 11. Update portfolio atomically via SQL UPDATE
             actual_fill_value = fill.price * fill.quantity
-            portfolio.available_balance -= actual_fill_value
-            portfolio.allocated_balance += actual_fill_value
+            portfolio_svc = PortfolioService(self._session)
+            await portfolio_svc.record_fill(
+                ExecutionMode(self._executor.mode.value), actual_fill_value
+            )
 
             await self._session.flush()
 

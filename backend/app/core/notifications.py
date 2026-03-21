@@ -7,6 +7,8 @@ Sends alerts for:
 - System halt/resume
 - Pending approvals (human-in-the-loop)
 """
+from datetime import datetime, timezone
+
 import httpx
 
 from app.config import settings
@@ -55,10 +57,28 @@ class TelegramNotifier:
                     status=resp.status_code,
                     body=resp.text[:200],
                 )
+                await self._dead_letter(message, f"HTTP {resp.status_code}")
                 return False
         except Exception as e:
             logger.error("telegram_error", error=str(e))
+            await self._dead_letter(message, str(e))
             return False
+
+    async def _dead_letter(self, message: str, error: str) -> None:
+        """Store failed notification in Redis dead-letter queue for later inspection."""
+        try:
+            import json
+            from app.core.redis import get_redis
+            redis = get_redis()
+            await redis.lpush("notifications:dead_letter", json.dumps({
+                "message": message[:500],
+                "error": error,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }))
+            # Keep only last 100 failed notifications
+            await redis.ltrim("notifications:dead_letter", 0, 99)
+        except Exception:
+            pass  # Redis itself might be down
 
     # ── Convenience methods ──
 

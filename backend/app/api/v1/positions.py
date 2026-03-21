@@ -79,7 +79,7 @@ async def close_position(
     portfolio_svc = PortfolioService(db)
     position_value = position.entry_price * position.quantity
     await portfolio_svc.record_close(
-        ExecutionMode.PAPER,  # TODO: get from position's order
+        ExecutionMode(position.execution_mode),
         position_value,
         trade.pnl,
     )

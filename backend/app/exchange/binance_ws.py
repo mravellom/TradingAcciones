@@ -62,11 +62,29 @@ class BinanceWebSocket:
             except Exception as e:
                 if not self._running:
                     break
+
+                # Mark as disconnected in Redis
+                try:
+                    await self._redis.set("ws:connected", "0")
+                except Exception:
+                    pass
+
                 logger.warning(
                     "binance_ws_disconnected",
                     error=str(e),
                     reconnect_delay=self._reconnect_delay,
                 )
+
+                # Send notification at max delay threshold
+                if self._reconnect_delay >= MAX_RECONNECT_DELAY:
+                    try:
+                        from app.core.notifications import notifier
+                        await notifier.notify_system_halt(
+                            f"Binance WebSocket disconnected for extended period. Error: {str(e)[:100]}"
+                        )
+                    except Exception:
+                        pass
+
                 await asyncio.sleep(self._reconnect_delay)
                 self._reconnect_delay = min(
                     self._reconnect_delay * 2, MAX_RECONNECT_DELAY
@@ -93,6 +111,8 @@ class BinanceWebSocket:
         async with websockets.connect(url, ping_interval=20) as ws:
             self._ws = ws
             self._reconnect_delay = 1  # Reset on successful connect
+            # Mark as connected in Redis
+            await self._redis.set("ws:connected", "1")
             logger.info("binance_ws_connected", streams=list(self._subscriptions))
 
             async for raw_msg in ws:
@@ -143,7 +163,7 @@ class BinanceWebSocket:
             "price": str(tick.price),
             "bid": str(tick.bid),
             "ask": str(tick.ask),
-            "timestamp": tick.timestamp.isoformat(),
+            "timestamp": str(tick.timestamp.timestamp()),  # epoch seconds for staleness check
         })
         await self._redis.expire(cache_key, 30)
 

@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.security import verify_api_key
 from app.dependencies import get_db_session
 from app.models.strategy_config import StrategyConfig
 from app.schemas.strategy import (
@@ -26,6 +27,7 @@ async def list_strategies(db: AsyncSession = Depends(get_db_session)):
 async def create_strategy(
     data: StrategyConfigCreate,
     db: AsyncSession = Depends(get_db_session),
+    _auth: str = Depends(verify_api_key),
 ):
     strategy = StrategyConfig(
         name=data.name,
@@ -56,6 +58,7 @@ async def update_strategy(
     strategy_id: uuid.UUID,
     data: StrategyConfigUpdate,
     db: AsyncSession = Depends(get_db_session),
+    _auth: str = Depends(verify_api_key),
 ):
     strategy = await db.get(StrategyConfig, strategy_id)
     if strategy is None:
@@ -76,6 +79,7 @@ async def update_strategy(
 async def activate_strategy(
     strategy_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
+    _auth: str = Depends(verify_api_key),
 ):
     strategy = await db.get(StrategyConfig, strategy_id)
     if strategy is None:
@@ -89,6 +93,7 @@ async def activate_strategy(
 async def deactivate_strategy(
     strategy_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
+    _auth: str = Depends(verify_api_key),
 ):
     strategy = await db.get(StrategyConfig, strategy_id)
     if strategy is None:

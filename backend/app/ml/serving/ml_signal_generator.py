@@ -66,10 +66,18 @@ class MLSignalGenerator(SignalGenerator):
         # Convert Klines to DataFrame
         df = self._klines_to_df(klines)
 
-        # Predict
-        should_trade, probability, feature_values = self._predictor.should_trade(df)
+        # Predict (now returns direction: BUY, SELL, or HOLD)
+        should_trade, direction, probability, feature_values = self._predictor.should_trade(df)
 
         if not should_trade:
+            return None
+
+        # Map direction to SignalType
+        if direction == "BUY":
+            signal_type = SignalType.BUY
+        elif direction == "SELL":
+            signal_type = SignalType.SELL
+        else:
             return None
 
         # Map probability to confidence (0.55 -> 0.6, 0.80 -> 0.85)
@@ -77,20 +85,25 @@ class MLSignalGenerator(SignalGenerator):
 
         # ATR-based SL/TP
         current_price = df["close"].iloc[-1]
-        atr = feature_values.get("atr_norm", 0.01) * current_price
 
         meta = self._predictor.metadata.get("label_config", {})
         tp_pct = Decimal(str(meta.get("tp_pct", 0.015)))
         sl_pct = Decimal(str(meta.get("sl_pct", 0.01)))
 
         entry_price = Decimal(str(current_price))
-        stop_loss = entry_price * (Decimal("1") - sl_pct)
-        take_profit = entry_price * (Decimal("1") + tp_pct)
+
+        if signal_type == SignalType.BUY:
+            stop_loss = entry_price * (Decimal("1") - sl_pct)
+            take_profit = entry_price * (Decimal("1") + tp_pct)
+        else:  # SELL
+            stop_loss = entry_price * (Decimal("1") + sl_pct)
+            take_profit = entry_price * (Decimal("1") - tp_pct)
 
         indicators = {
             "ml_probability": round(probability, 4),
             "ml_threshold": self._predictor.threshold,
             "ml_model": "xgboost",
+            "ml_direction": direction,
             "shadow_mode": self._shadow_mode,
         }
         # Add top features
@@ -99,7 +112,7 @@ class MLSignalGenerator(SignalGenerator):
 
         return SignalResult(
             symbol=symbol,
-            signal_type=SignalType.BUY,
+            signal_type=signal_type,
             confidence=confidence,
             indicators=indicators,
             entry_price=entry_price,

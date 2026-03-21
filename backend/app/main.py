@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -8,7 +9,7 @@ from app.api.v1.router import api_v1_router
 from app.api.websocket.routes import router as ws_router
 from app.api.websocket.ws_manager import manager as ws_manager
 from app.config import settings
-from app.core.database import engine
+from app.core.database import async_session_factory, engine
 from app.core.exceptions import TradingPlatformError
 from app.core.logging import get_logger, setup_logging
 from app.core.redis import get_redis
@@ -30,8 +31,38 @@ async def lifespan(app: FastAPI):
     # Verify Redis connection
     redis = get_redis()
     await redis.ping()
-    await redis.set("system:status", "RUNNING")
     logger.info("redis_connected")
+
+    # Run startup reconciliation (before setting RUNNING)
+    try:
+        from app.tasks.startup_reconciler import reconcile
+        async with async_session_factory() as session:
+            await reconcile(session)
+            await session.commit()
+        logger.info("startup_reconciliation_completed")
+    except Exception as e:
+        logger.error("startup_reconciliation_failed", error=str(e))
+
+    await redis.set("system:status", "RUNNING")
+
+    # Start runtime reconciler as background task (LIVE mode only)
+    reconciler_task = None
+    if settings.execution_mode == "LIVE":
+        try:
+            from app.domain.enums import ExecutionMode
+            from app.pipeline.execution.binance_executor import BinanceExecutor
+            from app.tasks.runtime_reconciler import RuntimeReconciler
+
+            executor = BinanceExecutor()
+            await executor.connect()
+            reconciler = RuntimeReconciler(
+                executor=executor,
+                session_factory=async_session_factory,
+            )
+            reconciler_task = asyncio.create_task(reconciler.start())
+            logger.info("runtime_reconciler_launched")
+        except Exception as e:
+            logger.error("runtime_reconciler_launch_failed", error=str(e))
 
     logger.info(
         "trading_platform_started",
@@ -43,6 +74,19 @@ async def lifespan(app: FastAPI):
 
     # Graceful Shutdown
     logger.info("shutting_down_trading_platform")
+
+    # Stop runtime reconciler
+    if reconciler_task is not None:
+        try:
+            reconciler.stop()
+            reconciler_task.cancel()
+            try:
+                await reconciler_task
+            except asyncio.CancelledError:
+                pass
+            logger.info("runtime_reconciler_stopped")
+        except Exception:
+            pass
 
     # 1. Mark system as shutting down
     try:
@@ -74,12 +118,12 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # CORS
+    # CORS — configurable via settings
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:4200"],
+        allow_origins=settings.cors_origins,
         allow_credentials=True,
-        allow_methods=["*"],
+        allow_methods=["GET", "POST", "PUT", "DELETE"],
         allow_headers=["*"],
     )
 

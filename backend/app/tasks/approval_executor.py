@@ -188,12 +188,16 @@ class ApprovalExecutor:
                 take_profit=order.take_profit,
                 strategy_id=order.signal_id,  # Link back to signal
                 signal_confidence=Decimal("0.7"),  # TODO: store in order
+                execution_mode=order.execution_mode,
             )
 
-            # 7. Update portfolio
+            # 7. Update portfolio (atomic SQL update)
+            from app.services.portfolio_service import PortfolioService
+            portfolio_svc = PortfolioService(session)
             actual_fill_value = fill.price * fill.quantity
-            portfolio.available_balance -= actual_fill_value
-            portfolio.allocated_balance += actual_fill_value
+            await portfolio_svc.record_fill(
+                ExecutionMode(order.execution_mode), actual_fill_value
+            )
 
             # 8. Record events
             tracker = TradeTracker(session)
@@ -218,8 +222,8 @@ class ApprovalExecutor:
                 await notifier.notify_fill(
                     order.symbol, order.side, str(fill.quantity), str(fill.price)
                 )
-            except Exception:
-                pass
+            except Exception as notif_err:
+                logger.error("notification_failed", order_id=str(order.id), error=str(notif_err))
 
         except Exception as e:
             logger.error(

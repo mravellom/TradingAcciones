@@ -10,6 +10,28 @@ logger = get_logger(__name__)
 
 T = TypeVar("T")
 
+# Binance error codes that should NOT be retried (permanent failures)
+NON_RETRYABLE_BINANCE_CODES = {
+    -2010,  # Insufficient balance
+    -1013,  # Invalid quantity
+    -1021,  # Timestamp outside recvWindow
+    -1102,  # Mandatory parameter missing
+    -1116,  # Invalid orderType
+    -2015,  # Invalid API-key, IP, or permissions
+}
+
+
+def is_retryable_binance_error(exc: Exception) -> bool:
+    """Check if a Binance exception is retryable (transient)."""
+    try:
+        from binance.exceptions import BinanceAPIException
+        if isinstance(exc, BinanceAPIException):
+            return exc.code not in NON_RETRYABLE_BINANCE_CODES
+    except ImportError:
+        pass
+    # Network errors, timeouts are always retryable
+    return True
+
 
 async def retry_async(
     func: Callable,
@@ -18,6 +40,7 @@ async def retry_async(
     base_delay: float = 1.0,
     max_delay: float = 30.0,
     exceptions: tuple = (Exception,),
+    should_retry: Callable[[Exception], bool] | None = None,
     **kwargs,
 ) -> T:
     """Retry an async function with exponential backoff.
@@ -28,6 +51,8 @@ async def retry_async(
         base_delay: Initial delay in seconds
         max_delay: Maximum delay between retries
         exceptions: Tuple of exception types to retry on
+        should_retry: Optional callback to decide if a specific exception is retryable.
+                      If it returns False, the exception is raised immediately.
     """
     last_exception = None
 
@@ -36,6 +61,16 @@ async def retry_async(
             return await func(*args, **kwargs)
         except exceptions as e:
             last_exception = e
+
+            # Check if this specific exception should be retried
+            if should_retry is not None and not should_retry(e):
+                logger.error(
+                    "retry_non_retryable",
+                    func=func.__name__,
+                    error=str(e),
+                )
+                raise
+
             if attempt == max_retries:
                 logger.error(
                     "retry_exhausted",

@@ -4,7 +4,7 @@ All balance mutations use SELECT FOR UPDATE to prevent race conditions.
 """
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
@@ -54,7 +54,7 @@ class PortfolioService:
         mode: ExecutionMode,
         fill_value: Decimal,
     ) -> None:
-        """Update portfolio after a fill. Uses row lock."""
+        """Update portfolio after a fill. Uses atomic SQL UPDATE."""
         portfolio = await self._lock_portfolio(mode)
         if portfolio is None:
             raise ValueError(f"Portfolio not found for mode {mode.value}")
@@ -65,10 +65,19 @@ class PortfolioService:
                 f"required={fill_value}"
             )
 
-        portfolio.available_balance -= fill_value
-        portfolio.allocated_balance += fill_value
-        # total_balance stays the same (money moved from available to allocated)
+        # Atomic SQL update — prevents race conditions on balance
+        stmt = (
+            update(Portfolio)
+            .where(Portfolio.id == portfolio.id)
+            .values(
+                available_balance=Portfolio.available_balance - fill_value,
+                allocated_balance=Portfolio.allocated_balance + fill_value,
+            )
+        )
+        await self._session.execute(stmt)
         await self._session.flush()
+        # Refresh to get updated values
+        await self._session.refresh(portfolio)
 
     async def record_close(
         self,
@@ -76,25 +85,42 @@ class PortfolioService:
         position_value: Decimal,
         pnl: Decimal,
     ) -> None:
-        """Update portfolio after closing a position. Uses row lock."""
+        """Update portfolio after closing a position. Uses atomic SQL UPDATE."""
         portfolio = await self._lock_portfolio(mode)
         if portfolio is None:
             raise ValueError(f"Portfolio not found for mode {mode.value}")
 
-        portfolio.allocated_balance -= position_value
-        portfolio.available_balance += position_value + pnl
-        portfolio.total_pnl += pnl
-        portfolio.daily_pnl += pnl
-        portfolio.total_balance = portfolio.available_balance + portfolio.allocated_balance
+        # Atomic SQL update — all balance changes in a single statement
+        new_available = Portfolio.available_balance + position_value + pnl
+        new_allocated = Portfolio.allocated_balance - position_value
+        stmt = (
+            update(Portfolio)
+            .where(Portfolio.id == portfolio.id)
+            .values(
+                allocated_balance=new_allocated,
+                available_balance=new_available,
+                total_pnl=Portfolio.total_pnl + pnl,
+                daily_pnl=Portfolio.daily_pnl + pnl,
+                total_balance=new_available + new_allocated,
+            )
+        )
+        await self._session.execute(stmt)
+        await self._session.flush()
+        # Refresh to get updated values for drawdown check
+        await self._session.refresh(portfolio)
 
-        # Update max drawdown
+        # Update max drawdown (needs refreshed values)
         if portfolio.total_pnl < 0 and portfolio.total_balance > 0:
             initial_balance = portfolio.total_balance - portfolio.total_pnl
             current_dd = abs(portfolio.total_pnl) / initial_balance
             if current_dd > portfolio.max_drawdown:
-                portfolio.max_drawdown = current_dd
-
-        await self._session.flush()
+                stmt_dd = (
+                    update(Portfolio)
+                    .where(Portfolio.id == portfolio.id)
+                    .values(max_drawdown=current_dd)
+                )
+                await self._session.execute(stmt_dd)
+                await self._session.flush()
 
         logger.info(
             "portfolio_updated",

@@ -85,6 +85,19 @@ class SystemHealthMonitor:
                     name="exchange", status="unhealthy", error=str(e),
                 )
 
+        # WebSocket connectivity
+        ws_connected = await self._redis.get("ws:connected")
+        if ws_connected == "1":
+            checks["websocket"] = HealthCheck(name="websocket", status="healthy")
+        elif ws_connected == "0":
+            checks["websocket"] = HealthCheck(
+                name="websocket", status="unhealthy", error="WebSocket disconnected"
+            )
+        else:
+            checks["websocket"] = HealthCheck(
+                name="websocket", status="degraded", error="WebSocket status unknown"
+            )
+
         # Circuit breaker
         cb_active = await self._redis.get("circuit_breaker:active")
         checks["circuit_breaker"] = HealthCheck(

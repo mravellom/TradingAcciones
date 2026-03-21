@@ -3,6 +3,7 @@ from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.security import verify_api_key
 from app.dependencies import get_db_session, get_redis_client
 from app.domain.enums import PositionStatus
 from app.models.portfolio import Portfolio
@@ -28,6 +29,7 @@ async def get_risk_config(db: AsyncSession = Depends(get_db_session)):
 async def update_risk_config(
     update: RiskConfigUpdate,
     db: AsyncSession = Depends(get_db_session),
+    _auth: str = Depends(verify_api_key),
 ):
     stmt = select(RiskConfig).where(RiskConfig.is_active == True)
     result = await db.execute(stmt)

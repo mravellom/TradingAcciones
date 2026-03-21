@@ -23,10 +23,17 @@ ORDER_TRANSITIONS: dict[OrderStatus, set[OrderStatus]] = {
         OrderStatus.EXPIRED,     # Approval timeout
     },
     OrderStatus.SUBMITTED: {
+        OrderStatus.SUBMITTING,
         OrderStatus.PARTIALLY_FILLED,
         OrderStatus.FILLED,
         OrderStatus.CANCELLED,
         OrderStatus.EXPIRED,
+    },
+    OrderStatus.SUBMITTING: {
+        OrderStatus.FILLED,
+        OrderStatus.PARTIALLY_FILLED,
+        OrderStatus.REJECTED,
+        OrderStatus.CANCELLED,
     },
     OrderStatus.PARTIALLY_FILLED: {
         OrderStatus.FILLED,

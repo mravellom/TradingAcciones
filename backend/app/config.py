@@ -1,3 +1,4 @@
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -13,6 +14,9 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     debug: bool = False
     api_key: str = ""  # Empty = auth disabled (dev mode)
+
+    # CORS
+    cors_origins: list[str] = ["http://localhost:4200"]
 
     # Rate limiting
     rate_limit_requests: int = 60  # requests per window
@@ -55,6 +59,29 @@ class Settings(BaseSettings):
     # Health monitor
     health_check_interval_seconds: int = 5
     health_max_exchange_latency_ms: int = 2000
+
+    # ML
+    model_max_age_days: int = 30
+
+    @model_validator(mode="after")
+    def validate_live_mode(self) -> "Settings":
+        """Fail fast if LIVE mode is misconfigured."""
+        if self.execution_mode == "LIVE":
+            if not self.api_key:
+                raise ValueError(
+                    "API_KEY must be set when EXECUTION_MODE=LIVE. "
+                    "Set API_KEY in your .env file."
+                )
+            if not self.binance_api_key or not self.binance_api_secret:
+                raise ValueError(
+                    "BINANCE_API_KEY and BINANCE_API_SECRET must be set when EXECUTION_MODE=LIVE."
+                )
+            if self.debug:
+                raise ValueError(
+                    "DEBUG must be False when EXECUTION_MODE=LIVE. "
+                    "Never run LIVE mode with debug enabled."
+                )
+        return self
 
 
 settings = Settings()

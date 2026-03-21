@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Index, Numeric, String
+from sqlalchemy import DateTime, ForeignKey, Index, Numeric, String, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -39,6 +39,11 @@ class Position(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         Numeric(20, 8), nullable=False, default=Decimal("0")
     )
 
+    execution_mode: Mapped[str] = mapped_column(
+        String(10), nullable=False, server_default=text("'PAPER'")
+    )
+    oco_order_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
     opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
@@ -46,4 +51,5 @@ class Position(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         Index("ix_positions_symbol", "symbol"),
         Index("ix_positions_status", "status"),
         Index("ix_positions_opened_at", "opened_at"),
+        Index("ix_positions_symbol_status", "symbol", "status"),
     )

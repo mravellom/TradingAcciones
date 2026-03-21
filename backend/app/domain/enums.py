@@ -23,6 +23,7 @@ class OrderStatus(str, Enum):
     SIZED = "SIZED"
     PENDING_APPROVAL = "PENDING_APPROVAL"  # Human-in-the-loop
     SUBMITTED = "SUBMITTED"
+    SUBMITTING = "SUBMITTING"  # Persisted before sending to exchange
     PARTIALLY_FILLED = "PARTIALLY_FILLED"
     FILLED = "FILLED"
     CANCELLED = "CANCELLED"

@@ -22,6 +22,18 @@ class PositionRepository(BaseRepository[Position]):
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
+    async def get_open_for_update(self, limit: int = 100) -> list[Position]:
+        """Get open positions with row-level lock (SKIP LOCKED to avoid blocking)."""
+        stmt = (
+            select(Position)
+            .where(Position.status == PositionStatus.OPEN.value)
+            .with_for_update(skip_locked=True)
+            .order_by(Position.opened_at.desc())
+            .limit(limit)
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
     async def get_open_by_symbol(self, symbol: str) -> list[Position]:
         stmt = (
             select(Position)
