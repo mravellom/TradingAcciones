@@ -306,11 +306,12 @@ class TradingPipeline:
 
             await self._tracker.record_order_submitted(order.id, correlation_id)
 
-            # 8. Persist SUBMITTING state before sending to exchange.
-            # If the process crashes after Binance accepts but before we commit,
-            # the startup reconciler will find this order and reconcile.
+            # 8. Persist SUBMITTING state to DISK before sending to exchange.
+            # This is a real commit (not just flush) so it survives crashes.
+            # If the process crashes after Binance accepts but before the final commit,
+            # the startup/runtime reconciler will find this SUBMITTING order and reconcile.
             order.status = OrderStatus.SUBMITTING.value
-            await self._session.flush()
+            await self._session.commit()
 
             fill = await self._executor.submit(
                 order_id=order.id,
@@ -372,10 +373,12 @@ class TradingPipeline:
                     )
 
             # 11. Update portfolio atomically via SQL UPDATE
+            # already_locked=True because we hold the FOR UPDATE lock from step 2
             actual_fill_value = fill.price * fill.quantity
             portfolio_svc = PortfolioService(self._session)
             await portfolio_svc.record_fill(
-                ExecutionMode(self._executor.mode.value), actual_fill_value
+                ExecutionMode(self._executor.mode.value), actual_fill_value,
+                already_locked=True,
             )
 
             await self._session.flush()

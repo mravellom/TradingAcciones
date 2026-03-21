@@ -34,9 +34,10 @@ class ConnectionManager:
         self._connections: set[WebSocket] = set()
         self._redis_task: asyncio.Task | None = None
 
-    async def connect(self, websocket: WebSocket, channels: list[str]) -> None:
+    async def connect(self, websocket: WebSocket, channels: list[str], already_accepted: bool = False) -> None:
         """Accept a WebSocket connection and subscribe to channels."""
-        await websocket.accept()
+        if not already_accepted:
+            await websocket.accept()
         self._connections.add(websocket)
 
         for ch in channels:

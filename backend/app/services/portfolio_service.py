@@ -53,9 +53,22 @@ class PortfolioService:
         self,
         mode: ExecutionMode,
         fill_value: Decimal,
+        already_locked: bool = False,
     ) -> None:
-        """Update portfolio after a fill. Uses atomic SQL UPDATE."""
-        portfolio = await self._lock_portfolio(mode)
+        """Update portfolio after a fill. Uses atomic SQL UPDATE.
+
+        Args:
+            already_locked: If True, skip SELECT FOR UPDATE (caller already holds lock).
+                           This prevents deadlock when orchestrator already locked the row.
+        """
+        if already_locked:
+            # Caller already holds the lock — just get the portfolio without re-locking
+            stmt = select(Portfolio).where(Portfolio.execution_mode == mode.value)
+            result = await self._session.execute(stmt)
+            portfolio = result.scalar_one_or_none()
+        else:
+            portfolio = await self._lock_portfolio(mode)
+
         if portfolio is None:
             raise ValueError(f"Portfolio not found for mode {mode.value}")
 
@@ -84,9 +97,20 @@ class PortfolioService:
         mode: ExecutionMode,
         position_value: Decimal,
         pnl: Decimal,
+        already_locked: bool = False,
     ) -> None:
-        """Update portfolio after closing a position. Uses atomic SQL UPDATE."""
-        portfolio = await self._lock_portfolio(mode)
+        """Update portfolio after closing a position. Uses atomic SQL UPDATE.
+
+        Args:
+            already_locked: If True, skip SELECT FOR UPDATE (caller already holds lock).
+        """
+        if already_locked:
+            stmt = select(Portfolio).where(Portfolio.execution_mode == mode.value)
+            result = await self._session.execute(stmt)
+            portfolio = result.scalar_one_or_none()
+        else:
+            portfolio = await self._lock_portfolio(mode)
+
         if portfolio is None:
             raise ValueError(f"Portfolio not found for mode {mode.value}")
 

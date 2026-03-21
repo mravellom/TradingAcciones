@@ -20,18 +20,23 @@ async def websocket_endpoint(
 
     Connect with: ws://localhost:8000/ws?channels=portfolio,positions&token=YOUR_API_KEY
     """
+    # Must accept before we can close with a code
+    await websocket.accept()
+
     # Authenticate WebSocket connection
     if settings.api_key:
         if not token or not secrets.compare_digest(token, settings.api_key):
-            await websocket.close(code=4001, reason="Unauthorized")
+            await websocket.close(code=1008, reason="Unauthorized")
             logger.warning("ws_auth_failed", reason="invalid_token")
             return
     elif not settings.debug:
-        await websocket.close(code=4001, reason="API key not configured")
+        # No API key configured + not in debug mode = reject
+        await websocket.close(code=1008, reason="API key not configured")
         return
 
     channel_list = [c.strip() for c in channels.split(",") if c.strip()]
-    await manager.connect(websocket, channel_list)
+    # Re-register with manager (already accepted)
+    await manager.connect(websocket, channel_list, already_accepted=True)
 
     try:
         while True:

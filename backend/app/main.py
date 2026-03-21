@@ -33,11 +33,23 @@ async def lifespan(app: FastAPI):
     await redis.ping()
     logger.info("redis_connected")
 
-    # Run startup reconciliation (before setting RUNNING)
+    # Connect executor BEFORE reconciliation (needed for LIVE mode reconciliation)
+    live_executor = None
+    if settings.execution_mode.upper() == "LIVE":
+        try:
+            from app.pipeline.execution.binance_executor import BinanceExecutor
+            live_executor = BinanceExecutor()
+            await live_executor.connect()
+            logger.info("binance_executor_connected_for_reconciliation")
+        except Exception as e:
+            logger.error("binance_executor_connect_failed", error=str(e))
+            # Continue without executor — reconciler will cancel orphaned orders
+
+    # Run startup reconciliation WITH executor (before setting RUNNING)
     try:
         from app.tasks.startup_reconciler import reconcile
         async with async_session_factory() as session:
-            await reconcile(session)
+            await reconcile(session, executor=live_executor)
             await session.commit()
         logger.info("startup_reconciliation_completed")
     except Exception as e:
@@ -47,16 +59,12 @@ async def lifespan(app: FastAPI):
 
     # Start runtime reconciler as background task (LIVE mode only)
     reconciler_task = None
-    if settings.execution_mode == "LIVE":
+    reconciler = None
+    if live_executor is not None:
         try:
-            from app.domain.enums import ExecutionMode
-            from app.pipeline.execution.binance_executor import BinanceExecutor
             from app.tasks.runtime_reconciler import RuntimeReconciler
-
-            executor = BinanceExecutor()
-            await executor.connect()
             reconciler = RuntimeReconciler(
-                executor=executor,
+                executor=live_executor,
                 session_factory=async_session_factory,
             )
             reconciler_task = asyncio.create_task(reconciler.start())
@@ -76,9 +84,9 @@ async def lifespan(app: FastAPI):
     logger.info("shutting_down_trading_platform")
 
     # Stop runtime reconciler
-    if reconciler_task is not None:
+    if reconciler_task is not None and reconciler is not None:
         try:
-            reconciler.stop()
+            await reconciler.stop()
             reconciler_task.cancel()
             try:
                 await reconciler_task

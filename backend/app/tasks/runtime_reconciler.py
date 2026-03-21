@@ -120,7 +120,7 @@ class RuntimeReconciler:
                 and_(
                     Order.status == OrderStatus.SUBMITTING.value,
                     Order.execution_mode == ExecutionMode.LIVE.value,
-                    Order.updated_at < threshold,
+                    Order.created_at < threshold,
                 )
             )
         )
@@ -287,10 +287,13 @@ class RuntimeReconciler:
             if not isinstance(self._executor, BinanceExecutor):
                 return []
 
-            # Get Binance account balance
+            # Get Binance account balance (free + locked = total on exchange)
             account = await self._executor.client.get_account()
-            binance_balances = {b["asset"]: Decimal(b["free"]) for b in account.get("balances", [])}
-            binance_usdt = binance_balances.get("USDT", Decimal("0"))
+            binance_total = Decimal("0")
+            for b in account.get("balances", []):
+                if b["asset"] == "USDT":
+                    binance_total = Decimal(b["free"]) + Decimal(b["locked"])
+                    break
 
             # Get local portfolio
             stmt = select(Portfolio).where(Portfolio.execution_mode == ExecutionMode.LIVE.value)
@@ -300,19 +303,22 @@ class RuntimeReconciler:
             if portfolio is None:
                 return []
 
-            local_available = portfolio.available_balance
+            # Compare total balance (available + allocated) vs Binance total
+            local_total = portfolio.total_balance
 
-            # Check drift
-            if local_available > 0:
-                drift = abs(binance_usdt - local_available) / local_available
+            if local_total > 0:
+                drift = abs(binance_total - local_total) / local_total
                 if drift > BALANCE_DRIFT_THRESHOLD:
                     issues.append({
                         "type": "BALANCE_DRIFT",
                         "severity": "WARNING",
-                        "local_available": str(local_available),
-                        "binance_usdt": str(binance_usdt),
+                        "local_total": str(local_total),
+                        "local_available": str(portfolio.available_balance),
+                        "local_allocated": str(portfolio.allocated_balance),
+                        "binance_total_usdt": str(binance_total),
                         "drift_pct": str(round(drift * 100, 2)),
-                        "action": f"Balance drift of {drift*100:.1f}% detected. "
+                        "action": f"Balance drift of {drift*100:.1f}% detected between "
+                                  f"local ({local_total}) and Binance ({binance_total}). "
                                   "May indicate missed fills or unclosed positions.",
                     })
 

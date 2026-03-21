@@ -81,7 +81,7 @@ class MLSignalGenerator(SignalGenerator):
             return None
 
         # Map probability to confidence (0.55 -> 0.6, 0.80 -> 0.85)
-        confidence = self._probability_to_confidence(probability)
+        confidence = self._probability_to_confidence(probability, direction)
 
         # ATR-based SL/TP
         current_price = df["close"].iloc[-1]
@@ -137,12 +137,19 @@ class MLSignalGenerator(SignalGenerator):
         return df
 
     @staticmethod
-    def _probability_to_confidence(probability: float) -> Decimal:
-        """Map model probability [0.5-1.0] to confidence [0.6-0.90].
+    def _probability_to_confidence(probability: float, direction: str = "BUY") -> Decimal:
+        """Map model probability to confidence [0.6-0.90].
 
-        Higher probability = higher confidence = larger position size.
+        For BUY: higher probability → higher confidence
+        For SELL: lower probability → higher confidence (inverted)
         """
+        if direction == "SELL":
+            # Invert: prob=0.05 (strong sell) → effective=0.95, prob=0.35 → effective=0.65
+            effective = 1.0 - probability
+        else:
+            effective = probability
+
         # Linear map: 0.50 -> 0.60, 0.80 -> 0.90
-        confidence = 0.60 + (probability - 0.50) * (0.30 / 0.30)
+        confidence = 0.60 + (effective - 0.50) * (0.30 / 0.30)
         confidence = max(0.60, min(0.90, confidence))
         return Decimal(str(round(confidence, 4)))

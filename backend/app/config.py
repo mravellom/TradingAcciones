@@ -1,4 +1,4 @@
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -17,6 +17,14 @@ class Settings(BaseSettings):
 
     # CORS
     cors_origins: list[str] = ["http://localhost:4200"]
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v):
+        """Parse comma-separated CORS origins from env var."""
+        if isinstance(v, str):
+            return [o.strip() for o in v.split(",") if o.strip()]
+        return v
 
     # Rate limiting
     rate_limit_requests: int = 60  # requests per window
@@ -66,6 +74,8 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def validate_live_mode(self) -> "Settings":
         """Fail fast if LIVE mode is misconfigured."""
+        # Normalize execution_mode to uppercase for consistent comparison
+        self.execution_mode = self.execution_mode.upper()
         if self.execution_mode == "LIVE":
             if not self.api_key:
                 raise ValueError(
