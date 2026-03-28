@@ -54,8 +54,7 @@
         <span>TP: {{ formatUsd(order.take_profit) }}</span>
       </div>
       <div class="approval-actions">
-        <button class="btn btn-primary" (click)="approveOrder(order.id)">Approve</button>
-        <button class="btn btn-danger" (click)="rejectOrder(order.id)">Reject</button>
+        <button class="btn btn-primary" (click)="openApproval(order)">Review</button>
       </div>
     </div>
   </div>
@@ -229,3 +228,11 @@
     </div>
   </div>
 </div>
+
+<app-approval-modal
+  [order]="selectedApproval"
+  [visible]="showApprovalModal"
+  (approved)="onApproved($event)"
+  (rejected)="onRejected($event)"
+  (closed)="onModalClosed()"
+/>

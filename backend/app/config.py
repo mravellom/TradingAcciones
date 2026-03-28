@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -14,6 +16,9 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     debug: bool = False
     api_key: str = ""  # Empty = auth disabled (dev mode)
+
+    # Secrets backend: "env" (default) or "docker-secrets"
+    secrets_backend: str = "env"
 
     # CORS
     cors_origins: list[str] = ["http://localhost:4200"]
@@ -70,6 +75,25 @@ class Settings(BaseSettings):
 
     # ML
     model_max_age_days: int = 30
+
+    @model_validator(mode="before")
+    @classmethod
+    def load_docker_secrets(cls, data: dict) -> dict:
+        """Load secrets from Docker secrets files (/run/secrets/<name>)."""
+        if data.get("secrets_backend", "env") != "docker-secrets":
+            return data
+        secret_fields = {
+            "database_url": "database_url",
+            "api_key": "api_key",
+            "binance_api_key": "binance_api_key",
+            "binance_api_secret": "binance_api_secret",
+            "telegram_bot_token": "telegram_bot_token",
+        }
+        for secret_name, field_name in secret_fields.items():
+            secret_path = Path(f"/run/secrets/{secret_name}")
+            if secret_path.exists():
+                data[field_name] = secret_path.read_text().strip()
+        return data
 
     @model_validator(mode="after")
     def validate_live_mode(self) -> "Settings":

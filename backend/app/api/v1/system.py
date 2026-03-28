@@ -19,6 +19,7 @@ async def health_check(
     db: AsyncSession = Depends(get_db_session),
     redis: Redis = Depends(get_redis_client),
 ):
+    """Check system health: database, Redis, and system status."""
     checks = {}
 
     # Database

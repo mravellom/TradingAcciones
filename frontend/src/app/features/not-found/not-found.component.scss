@@ -1,0 +1,40 @@
+.error-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 80vh;
+  text-align: center;
+
+  &__content { max-width: 400px; }
+
+  &__code {
+    font-size: 80px;
+    font-weight: 700;
+    color: #6366f1;
+    margin: 0;
+    line-height: 1;
+  }
+
+  &__title {
+    font-size: 24px;
+    color: #e0e0e0;
+    margin: 16px 0 8px;
+  }
+
+  &__description {
+    color: #888;
+    font-size: 14px;
+    margin-bottom: 24px;
+  }
+
+  &__link {
+    display: inline-block;
+    padding: 10px 24px;
+    background: #6366f1;
+    color: #fff;
+    border-radius: 8px;
+    text-decoration: none;
+    font-weight: 500;
+    &:hover { background: #4f46e5; }
+  }
+}

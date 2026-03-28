@@ -4,6 +4,8 @@ import { Subject, interval } from 'rxjs';
 import { takeUntil, switchMap, startWith } from 'rxjs/operators';
 import { ApiService } from '../../core/services/api.service';
 import { WebSocketService } from '../../core/services/websocket.service';
+import { NotificationService } from '../../core/services/notification.service';
+import { ApprovalModalComponent } from '../../shared/components/approval-modal/approval-modal.component';
 import {
   Portfolio,
   Position,
@@ -15,7 +17,7 @@ import {
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, ApprovalModalComponent],
   templateUrl: './dashboard.component.html',
   styleUrl: './dashboard.component.scss',
 })
@@ -30,12 +32,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
   strategyPerf: any[] = [];
   pnlData: any[] = [];
   pendingApprovals: any[] = [];
+  selectedApproval: any = null;
+  showApprovalModal = false;
 
   private destroy$ = new Subject<void>();
 
   constructor(
     private api: ApiService,
-    public ws: WebSocketService
+    public ws: WebSocketService,
+    private notification: NotificationService,
   ) {}
 
   ngOnInit(): void {
@@ -63,54 +68,54 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   loadData(): void {
-    this.api.getPortfolio().subscribe({
-      next: (p) => (this.portfolio = p),
-      error: () => {},
-    });
-    this.api.getOpenPositions().subscribe({
-      next: (p) => (this.openPositions = p),
-      error: () => {},
-    });
-    this.api.getTrades(10).subscribe({
-      next: (t) => (this.recentTrades = t),
-      error: () => {},
-    });
-    this.api.getSignals(10).subscribe({
-      next: (s) => (this.recentSignals = s),
-      error: () => {},
-    });
-    this.api.getHealth().subscribe({
-      next: (h) => (this.health = h),
-      error: () => {},
-    });
-    this.api.getWinRate().subscribe({
-      next: (r) => (this.winRate = r.win_rate),
-      error: () => {},
-    });
-    this.api.getAnalyticsSummary().subscribe({
-      next: (s) => (this.summary = s),
-      error: () => {},
-    });
-    this.api.getPerStrategyPerformance().subscribe({
-      next: (p) => (this.strategyPerf = p),
-      error: () => {},
-    });
-    this.api.getCumulativePnl(30).subscribe({
-      next: (d) => (this.pnlData = d),
-      error: () => {},
-    });
-    this.api.getPendingApprovals().subscribe({
-      next: (a) => (this.pendingApprovals = a),
-      error: () => {},
+    this.api.getPortfolio().subscribe((p) => (this.portfolio = p));
+    this.api.getOpenPositions().subscribe((p) => (this.openPositions = p));
+    this.api.getTrades(10).subscribe((t) => (this.recentTrades = t));
+    this.api.getSignals(10).subscribe((s) => (this.recentSignals = s));
+    this.api.getHealth().subscribe((h) => (this.health = h));
+    this.api.getWinRate().subscribe((r) => (this.winRate = r.win_rate));
+    this.api.getAnalyticsSummary().subscribe((s) => (this.summary = s));
+    this.api.getPerStrategyPerformance().subscribe((p) => (this.strategyPerf = p));
+    this.api.getCumulativePnl(30).subscribe((d) => (this.pnlData = d));
+    this.api.getPendingApprovals().subscribe((a) => (this.pendingApprovals = a));
+  }
+
+  openApproval(order: any): void {
+    this.selectedApproval = order;
+    this.showApprovalModal = true;
+  }
+
+  onApproved(orderId: string): void {
+    this.api.approveOrder(orderId).subscribe({
+      next: () => {
+        this.notification.success('Order approved');
+        this.showApprovalModal = false;
+        this.selectedApproval = null;
+        this.loadData();
+      },
+      error: () => {
+        this.showApprovalModal = false;
+      },
     });
   }
 
-  approveOrder(orderId: string): void {
-    this.api.approveOrder(orderId).subscribe(() => this.loadData());
+  onRejected(event: { id: string; reason: string }): void {
+    this.api.rejectOrder(event.id, event.reason).subscribe({
+      next: () => {
+        this.notification.warning('Order rejected');
+        this.showApprovalModal = false;
+        this.selectedApproval = null;
+        this.loadData();
+      },
+      error: () => {
+        this.showApprovalModal = false;
+      },
+    });
   }
 
-  rejectOrder(orderId: string): void {
-    this.api.rejectOrder(orderId).subscribe(() => this.loadData());
+  onModalClosed(): void {
+    this.showApprovalModal = false;
+    this.selectedApproval = null;
   }
 
   getPnlClass(value: string): string {

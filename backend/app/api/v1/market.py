@@ -18,6 +18,7 @@ async def _get_binance() -> BinanceClient:
 
 @router.get("/ticker/{symbol}")
 async def get_ticker(symbol: str):
+    """Get current ticker data (price, bid, ask, volume) for a symbol."""
     binance = await _get_binance()
     ticker = await binance.get_ticker(symbol.upper())
     return {
@@ -36,6 +37,7 @@ async def get_klines(
     interval: str = Query(default="1h", pattern="^(1m|5m|15m|30m|1h|4h|1d)$"),
     limit: int = Query(default=100, ge=1, le=1000),
 ):
+    """Get candlestick/kline data for a symbol with configurable interval and limit."""
     binance = await _get_binance()
     klines = await binance.get_klines(symbol.upper(), interval, limit)
     return [

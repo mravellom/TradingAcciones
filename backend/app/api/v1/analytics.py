@@ -10,6 +10,7 @@ router = APIRouter(prefix="/analytics", tags=["analytics"])
 
 @router.get("/summary")
 async def get_summary(db: AsyncSession = Depends(get_db_session)):
+    """Get trading performance summary: win rate, PnL, Sharpe ratio, max drawdown."""
     svc = AnalyticsService(db)
     return await svc.get_summary()
 
@@ -19,6 +20,7 @@ async def get_cumulative_pnl(
     days: int = Query(default=30, ge=1, le=365),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Get daily cumulative PnL over the specified number of days."""
     svc = AnalyticsService(db)
     return await svc.get_cumulative_pnl(days)
 
@@ -28,18 +30,21 @@ async def get_drawdown(
     days: int = Query(default=30, ge=1, le=365),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Get drawdown series over the specified number of days."""
     svc = AnalyticsService(db)
     return await svc.get_drawdown_series(days)
 
 
 @router.get("/per-strategy")
 async def get_per_strategy(db: AsyncSession = Depends(get_db_session)):
+    """Get performance breakdown per trading strategy."""
     svc = AnalyticsService(db)
     return await svc.get_per_strategy_performance()
 
 
 @router.get("/paper-vs-live")
 async def get_paper_vs_live(db: AsyncSession = Depends(get_db_session)):
+    """Compare paper trading vs live trading performance metrics."""
     svc = ComparisonService(db)
     return await svc.get_execution_comparison()
 

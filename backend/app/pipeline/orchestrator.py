@@ -393,6 +393,18 @@ class TradingPipeline:
                 correlation_id=correlation_id,
             )
 
+            # Notify via Telegram
+            try:
+                from app.core.notifications import notifier
+                await notifier.notify_fill(
+                    symbol=intent.symbol,
+                    side=order.side,
+                    qty=str(fill.quantity),
+                    price=str(fill.price),
+                )
+            except Exception:
+                pass  # Never let notification failure break the pipeline
+
             return PipelineResult(
                 action="EXECUTED",
                 order_id=order.id,

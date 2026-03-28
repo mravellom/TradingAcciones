@@ -1,0 +1,38 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+jobs:
+  deploy:
+    name: Deploy to ${{ github.event.inputs.environment }}
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        working-directory: backend
+        run: |
+          docker build -t trading-platform:${{ github.sha }} .
+          docker tag trading-platform:${{ github.sha }} trading-platform:latest
+
+      - name: Deploy
+        run: |
+          echo "Deploying to ${{ github.event.inputs.environment }}"
+          echo "Image: trading-platform:${{ github.sha }}"
+          # Add your deployment commands here:
+          # - Push to container registry
+          # - Update Kubernetes deployment
+          # - Docker Compose on remote server
+          # - etc.

@@ -34,4 +34,25 @@ export const routes: Routes = [
         (m) => m.RiskPanelComponent
       ),
   },
+  {
+    path: 'analytics',
+    loadComponent: () =>
+      import('./features/analytics/analytics.component').then(
+        (m) => m.AnalyticsComponent
+      ),
+  },
+  {
+    path: 'error',
+    loadComponent: () =>
+      import('./features/server-error/server-error.component').then(
+        (m) => m.ServerErrorComponent
+      ),
+  },
+  {
+    path: '**',
+    loadComponent: () =>
+      import('./features/not-found/not-found.component').then(
+        (m) => m.NotFoundComponent
+      ),
+  },
 ];

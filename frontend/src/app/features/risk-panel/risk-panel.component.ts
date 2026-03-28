@@ -42,14 +42,8 @@ export class RiskPanelComponent implements OnInit, OnDestroy {
   }
 
   loadData(): void {
-    this.api.getRiskStatus().subscribe({
-      next: (r) => (this.riskStatus = r),
-      error: () => {},
-    });
-    this.api.getHealth().subscribe({
-      next: (h) => (this.health = h),
-      error: () => {},
-    });
+    this.api.getRiskStatus().subscribe((r) => (this.riskStatus = r));
+    this.api.getHealth().subscribe((h) => (this.health = h));
   }
 
   haltSystem(): void {

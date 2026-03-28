@@ -10,8 +10,9 @@ import {
   RiskStatus,
   HealthStatus,
 } from '../../shared/models/trading.models';
+import { environment } from '../../../environments/environment';
 
-const BASE_URL = 'http://localhost:8000/api/v1';
+const BASE_URL = environment.apiUrl;
 
 @Injectable({ providedIn: 'root' })
 export class ApiService {

@@ -122,8 +122,12 @@ async def lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     app = FastAPI(
         title=settings.app_name,
+        description="Crypto trading platform with ML signals, risk management, and paper/live execution.",
         version=settings.app_version,
         lifespan=lifespan,
+        docs_url="/docs" if settings.debug else None,
+        redoc_url="/redoc" if settings.debug else None,
+        openapi_url="/openapi.json" if settings.debug else None,
     )
 
     # CORS — configurable via settings

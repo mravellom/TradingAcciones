@@ -1,0 +1,24 @@
+import { TestBed } from '@angular/core/testing';
+import { WebSocketService } from './websocket.service';
+
+describe('WebSocketService', () => {
+  let service: WebSocketService;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({});
+    service = TestBed.inject(WebSocketService);
+  });
+
+  it('should be created', () => {
+    expect(service).toBeTruthy();
+  });
+
+  it('should start disconnected', () => {
+    expect(service.connected).toBe(false);
+  });
+
+  it('should clean up on disconnect', () => {
+    service.disconnect();
+    expect(service.connected).toBe(false);
+  });
+});

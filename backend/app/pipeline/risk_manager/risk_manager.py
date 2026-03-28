@@ -53,14 +53,18 @@ class RiskManager:
                 )
 
             if decision.action == RiskAction.HALT_SYSTEM:
-                await self._circuit_breaker.activate(
-                    reason=f"[{decision.rule}] {decision.reason}"
-                )
+                cb_reason = f"[{decision.rule}] {decision.reason}"
+                await self._circuit_breaker.activate(reason=cb_reason)
                 logger.warning(
                     "risk_halt_system",
                     rule=decision.rule,
                     reason=decision.reason,
                 )
+                try:
+                    from app.core.notifications import notifier
+                    await notifier.notify_circuit_breaker(cb_reason)
+                except Exception:
+                    pass  # Never let notification failure block risk management
                 return decision
 
             if decision.action in (RiskAction.REJECT, RiskAction.REDUCE_SIZE):

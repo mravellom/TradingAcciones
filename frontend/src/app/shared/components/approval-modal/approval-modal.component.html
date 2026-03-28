@@ -1,0 +1,69 @@
+@if (visible && order) {
+  <div class="modal-backdrop" (click)="close()">
+    <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal__header">
+        <h3>Order Approval Required</h3>
+        <button class="modal__close" (click)="close()">&times;</button>
+      </div>
+
+      <div class="modal__body">
+        <div class="order-details">
+          <div class="detail-row">
+            <span class="label">Symbol</span>
+            <span class="value">{{ order.symbol }}</span>
+          </div>
+          <div class="detail-row">
+            <span class="label">Side</span>
+            <span class="value" [class.buy]="order.side === 'BUY'" [class.sell]="order.side === 'SELL'">
+              {{ order.side }}
+            </span>
+          </div>
+          <div class="detail-row">
+            <span class="label">Quantity</span>
+            <span class="value">{{ order.requested_qty }}</span>
+          </div>
+          <div class="detail-row">
+            <span class="label">Price</span>
+            <span class="value">{{ order.requested_price }}</span>
+          </div>
+          <div class="detail-row">
+            <span class="label">Stop Loss</span>
+            <span class="value danger">{{ order.stop_loss }}</span>
+          </div>
+          <div class="detail-row">
+            <span class="label">Take Profit</span>
+            <span class="value success">{{ order.take_profit }}</span>
+          </div>
+          <div class="detail-row">
+            <span class="label">Mode</span>
+            <span class="value">{{ order.execution_mode }}</span>
+          </div>
+          <div class="detail-row">
+            <span class="label">Created</span>
+            <span class="value">{{ order.created_at | date:'medium' }}</span>
+          </div>
+        </div>
+
+        <div class="reject-section">
+          <label for="rejectReason">Rejection reason (optional)</label>
+          <input
+            id="rejectReason"
+            type="text"
+            [(ngModel)]="rejectReason"
+            placeholder="Reason for rejection..."
+            [disabled]="loading"
+          />
+        </div>
+      </div>
+
+      <div class="modal__footer">
+        <button class="btn btn--reject" (click)="reject()" [disabled]="loading">
+          {{ loading ? 'Processing...' : 'Reject' }}
+        </button>
+        <button class="btn btn--approve" (click)="approve()" [disabled]="loading">
+          {{ loading ? 'Processing...' : 'Approve' }}
+        </button>
+      </div>
+    </div>
+  </div>
+}

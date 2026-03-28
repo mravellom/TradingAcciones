@@ -4,7 +4,9 @@ import { webSocket, WebSocketSubject } from 'rxjs/webSocket';
 import { retry, tap, switchMap, catchError, filter, map } from 'rxjs/operators';
 import { WSMessage } from '../../shared/models/trading.models';
 
-const WS_URL = 'ws://localhost:8000/ws';
+import { environment } from '../../../environments/environment';
+
+const WS_URL = environment.wsUrl;
 const RECONNECT_INTERVAL = 3000;
 
 @Injectable({ providedIn: 'root' })

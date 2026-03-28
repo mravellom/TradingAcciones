@@ -17,9 +17,24 @@
       <li>
         <a routerLink="/risk" routerLinkActive="active">Risk Panel</a>
       </li>
+      <li>
+        <a routerLink="/analytics" routerLinkActive="active">Analytics</a>
+      </li>
     </ul>
+    <div class="sidebar-footer">
+      <button class="tutorial-btn" (click)="showTutorial = true">
+        <span class="tutorial-icon">?</span>
+        Tutorial
+      </button>
+    </div>
   </nav>
   <main class="content">
     <router-outlet />
   </main>
 </div>
+
+<app-toast />
+
+@if (showTutorial) {
+  <app-tutorial-modal (close)="showTutorial = false" />
+}

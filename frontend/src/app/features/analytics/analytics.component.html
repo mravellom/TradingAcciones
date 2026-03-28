@@ -1,0 +1,169 @@
+<div class="analytics">
+  <h2>Analytics Dashboard</h2>
+
+  <!-- Summary Cards -->
+  <div class="cards-grid" *ngIf="summary">
+    <div class="card">
+      <div class="card-header">Total Trades</div>
+      <div class="card-value">{{ summary.total_trades }}</div>
+    </div>
+    <div class="card">
+      <div class="card-header">Win Rate</div>
+      <div class="card-value">{{ formatPercent(summary.win_rate || 0) }}</div>
+    </div>
+    <div class="card">
+      <div class="card-header">Total P&L</div>
+      <div class="card-value" [class]="getPnlClass(summary.total_pnl || '0')">
+        $ {{ formatUsd(summary.total_pnl || '0') }}
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">Avg Return</div>
+      <div class="card-value">{{ summary.avg_return || '0' }}%</div>
+    </div>
+    <div class="card">
+      <div class="card-header">Sharpe Ratio</div>
+      <div class="card-value">{{ summary.sharpe_ratio?.toFixed(2) || 'N/A' }}</div>
+    </div>
+    <div class="card">
+      <div class="card-header">Max Drawdown</div>
+      <div class="card-value negative">{{ summary.max_drawdown || 'N/A' }}</div>
+    </div>
+  </div>
+
+  <!-- Cumulative PnL Chart -->
+  <div class="section" *ngIf="pnlData.length > 0">
+    <h3>Cumulative P&L (30d)</h3>
+    <div class="chart">
+      <div class="chart-row" *ngFor="let d of pnlData">
+        <span class="chart-label">{{ d.date }}</span>
+        <span class="chart-bar-container">
+          <span class="chart-bar"
+                [class.positive]="d.cumulative_pnl >= 0"
+                [class.negative]="d.cumulative_pnl < 0"
+                [style.width.%]="getPnlBarWidth(d.cumulative_pnl)">
+          </span>
+        </span>
+        <span class="chart-value" [class]="getPnlClass(d.cumulative_pnl)">
+          $ {{ d.cumulative_pnl }}
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Drawdown Chart -->
+  <div class="section" *ngIf="drawdownData.length > 0">
+    <h3>Drawdown (30d)</h3>
+    <div class="chart">
+      <div class="chart-row" *ngFor="let d of drawdownData">
+        <span class="chart-label">{{ d.date }}</span>
+        <span class="chart-bar-container">
+          <span class="chart-bar negative"
+                [style.width.%]="getDrawdownBarWidth(d.drawdown_pct || d.drawdown)">
+          </span>
+        </span>
+        <span class="chart-value negative">
+          {{ d.drawdown_pct || d.drawdown }}
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Strategy Comparison -->
+  <div class="section" *ngIf="strategyPerf.length > 0">
+    <h3>Strategy Performance</h3>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Strategy</th>
+          <th>Trades</th>
+          <th>Win Rate</th>
+          <th>Total P&L</th>
+          <th>Avg P&L</th>
+          <th>Best</th>
+          <th>Worst</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let sp of strategyPerf">
+          <td>{{ sp.strategy_id?.substring(0, 8) }}...</td>
+          <td>{{ sp.total_trades }}</td>
+          <td>{{ formatPercent(sp.win_rate) }}</td>
+          <td [class]="getPnlClass(sp.total_pnl)">$ {{ sp.total_pnl }}</td>
+          <td>$ {{ sp.avg_pnl }}</td>
+          <td class="positive">$ {{ sp.best_trade }}</td>
+          <td class="negative">$ {{ sp.worst_trade }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Paper vs Live -->
+  <div class="section" *ngIf="paperVsLive">
+    <h3>Paper vs Live Comparison</h3>
+    <div class="comparison-grid">
+      <div class="comparison-card" *ngIf="paperVsLive.paper">
+        <h4>Paper Trading</h4>
+        <div class="comparison-row">
+          <span class="label">Trades</span>
+          <span class="value">{{ paperVsLive.paper.total_trades }}</span>
+        </div>
+        <div class="comparison-row">
+          <span class="label">Win Rate</span>
+          <span class="value">{{ formatPercent(paperVsLive.paper.win_rate || 0) }}</span>
+        </div>
+        <div class="comparison-row">
+          <span class="label">Total P&L</span>
+          <span class="value" [class]="getPnlClass(paperVsLive.paper.total_pnl || '0')">
+            $ {{ paperVsLive.paper.total_pnl }}
+          </span>
+        </div>
+      </div>
+      <div class="comparison-card" *ngIf="paperVsLive.live">
+        <h4>Live Trading</h4>
+        <div class="comparison-row">
+          <span class="label">Trades</span>
+          <span class="value">{{ paperVsLive.live.total_trades }}</span>
+        </div>
+        <div class="comparison-row">
+          <span class="label">Win Rate</span>
+          <span class="value">{{ formatPercent(paperVsLive.live.win_rate || 0) }}</span>
+        </div>
+        <div class="comparison-row">
+          <span class="label">Total P&L</span>
+          <span class="value" [class]="getPnlClass(paperVsLive.live.total_pnl || '0')">
+            $ {{ paperVsLive.live.total_pnl }}
+          </span>
+        </div>
+      </div>
+    </div>
+    <p class="empty" *ngIf="!paperVsLive.paper && !paperVsLive.live">
+      No comparison data available yet
+    </p>
+  </div>
+
+  <!-- ML Shadow Performance -->
+  <div class="section" *ngIf="mlShadow">
+    <h3>ML Shadow Signals</h3>
+    <div *ngIf="mlShadow.status === 'no_shadow_signals'">
+      <p class="empty">{{ mlShadow.message }}</p>
+    </div>
+    <div *ngIf="mlShadow.total_shadow_signals">
+      <p class="info-text">Total shadow signals: {{ mlShadow.total_shadow_signals }}</p>
+      <div class="ml-cards" *ngIf="mlShadow.by_symbol">
+        <div class="ml-card" *ngFor="let entry of mlShadow.by_symbol | keyvalue">
+          <h4>{{ entry.key }}</h4>
+          <div class="comparison-row">
+            <span class="label">Signals</span>
+            <span class="value">{{ entry.value.count }}</span>
+          </div>
+          <div class="comparison-row">
+            <span class="label">Avg Confidence</span>
+            <span class="value">{{ formatPercent(entry.value.avg_confidence) }}</span>
+          </div>
+        </div>
+      </div>
+      <p class="info-text muted" *ngIf="mlShadow.note">{{ mlShadow.note }}</p>
+    </div>
+  </div>
+</div>
