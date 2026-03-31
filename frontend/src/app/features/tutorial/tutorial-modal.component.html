@@ -1,0 +1,48 @@
+<div class="modal-overlay" (click)="onOverlayClick($event)">
+  <div class="modal-container">
+    <div class="modal-header">
+      <h2>Tutorial — Trading Platform</h2>
+      <button class="close-btn" (click)="close.emit()">&times;</button>
+    </div>
+
+    <div class="modal-body">
+      <!-- Sidebar navigation -->
+      <div class="tutorial-nav">
+        @for (section of sections; track section.title; let i = $index) {
+          <button
+            class="nav-item"
+            [class.active]="activeSection === i"
+            (click)="activeSection = i"
+          >
+            <span class="nav-num">{{ section.icon }}</span>
+            <span class="nav-title">{{ section.title }}</span>
+          </button>
+        }
+      </div>
+
+      <!-- Content area -->
+      <div class="tutorial-content">
+        <h2 class="section-title">{{ sections[activeSection].title }}</h2>
+        <div class="section-body" [innerHTML]="sections[activeSection].content"></div>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button
+        class="btn btn-secondary"
+        [disabled]="activeSection === 0"
+        (click)="activeSection = activeSection - 1"
+      >
+        Anterior
+      </button>
+      <span class="page-indicator">{{ activeSection + 1 }} / {{ sections.length }}</span>
+      <button
+        class="btn btn-primary"
+        [disabled]="activeSection === sections.length - 1"
+        (click)="activeSection = activeSection + 1"
+      >
+        Siguiente
+      </button>
+    </div>
+  </div>
+</div>

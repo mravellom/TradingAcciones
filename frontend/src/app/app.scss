@@ -60,6 +60,46 @@
   }
 }
 
+.sidebar-footer {
+  margin-top: auto;
+  padding: 16px 20px;
+  border-top: 1px solid #30363d;
+
+  .tutorial-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 14px;
+    background: rgba(88, 166, 255, 0.08);
+    border: 1px solid rgba(88, 166, 255, 0.2);
+    border-radius: 8px;
+    color: #58a6ff;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+
+    .tutorial-icon {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #1f6feb;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+
+    &:hover {
+      background: rgba(88, 166, 255, 0.15);
+      border-color: #58a6ff;
+    }
+  }
+}
+
 .content {
   flex: 1;
   overflow-y: auto;
