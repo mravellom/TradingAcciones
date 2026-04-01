@@ -24,6 +24,7 @@ class PositionCreate(PositionBase):
 
 class PositionResponse(PositionBase):
     id: uuid.UUID
+    asset_class: str = "CRYPTO"
     status: PositionStatus
     unrealized_pnl: Decimal
     realized_pnl: Decimal

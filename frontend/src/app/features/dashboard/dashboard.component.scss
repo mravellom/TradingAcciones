@@ -27,6 +27,14 @@
     margin-left: auto;
     color: #8b949e;
   }
+
+  .market-status {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: #8b949e;
+    margin-left: 16px;
+  }
 }
 
 .cards-grid {

@@ -22,6 +22,16 @@ class PositionRepository(BaseRepository[Position]):
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
+    async def get_by_asset_class(self, asset_class: str, limit: int = 100) -> list[Position]:
+        stmt = (
+            select(Position)
+            .where(Position.asset_class == asset_class)
+            .order_by(Position.created_at.desc())
+            .limit(limit)
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
     async def get_open_for_update(self, limit: int = 100) -> list[Position]:
         """Get open positions with row-level lock (SKIP LOCKED to avoid blocking)."""
         stmt = (

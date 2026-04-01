@@ -30,6 +30,7 @@ from app.pipeline.signal_engine.composite import CompositeSignalGenerator
 from app.pipeline.signal_engine.rsi import RSISignalGenerator
 from app.pipeline.signal_engine.sma_crossover import SMACrossoverSignalGenerator
 from app.pipeline.strategy.momentum import MomentumStrategy
+from app.pipeline.strategy.stock_momentum import StockMomentumStrategy
 from app.services.market_data import MarketDataService
 from app.tasks.daily_reset import DailyResetTask
 from app.tasks.position_monitor import PositionMonitor
@@ -95,8 +96,20 @@ async def start_background_tasks():
     tasks = []
 
     # 1. Signal Scanner (ML + RSI + SMA composite)
+    # Initialize Alpaca exchange if enabled
+    alpaca_exchange = None
+    if settings.alpaca_enabled:
+        try:
+            from app.exchange.alpaca_client import AlpacaClient
+            alpaca_exchange = AlpacaClient()
+            await alpaca_exchange.connect()
+            logger.info("alpaca_client_connected_for_paper_trading")
+        except Exception as e:
+            logger.error("alpaca_connect_failed", error=str(e))
+            alpaca_exchange = None
+
     if exchange:
-        market_data = MarketDataService(exchange)
+        market_data = MarketDataService(exchange, stock_exchange=alpaca_exchange)
 
         # Create ML-enhanced strategies (one per symbol)
         ml_strategies = _create_ml_strategy(strategy_id, symbols)
@@ -104,6 +117,14 @@ async def start_background_tasks():
             strategies = ml_strategies
         else:
             strategies = [MomentumStrategy(strategy_id=strategy_id)]
+
+        # Add stock strategy if Alpaca is enabled
+        if alpaca_exchange:
+            from uuid import uuid4
+            stock_strategy = StockMomentumStrategy(strategy_id=uuid4())
+            stock_strategy.symbols = settings.stock_symbols
+            strategies.append(stock_strategy)
+            logger.info("stock_momentum_strategy_added", symbols=settings.stock_symbols)
 
         scanner = SignalScanner(
             strategies=strategies,
@@ -116,6 +137,7 @@ async def start_background_tasks():
             "signal_scanner_queued",
             interval=60,
             strategy_type="ml_composite" if ml_strategies else "momentum_only",
+            stock_enabled=alpaca_exchange is not None,
         )
 
     # 2. Position Monitor
@@ -169,6 +191,8 @@ async def start_background_tasks():
 
     if exchange:
         await exchange.disconnect()
+    if alpaca_exchange:
+        await alpaca_exchange.disconnect()
 
     logger.info("background_tasks_stopped")
 

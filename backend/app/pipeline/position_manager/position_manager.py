@@ -37,10 +37,12 @@ class PositionManager:
         strategy_id: UUID,
         signal_confidence: Decimal,
         execution_mode: str = "PAPER",
+        asset_class: str = "CRYPTO",
     ) -> Position:
         """Create a new position from a fill."""
         position = Position(
             symbol=fill.symbol,
+            asset_class=asset_class,
             side="LONG",
             status=PositionStatus.OPEN.value,
             entry_order_id=fill.order_id,
@@ -121,6 +123,7 @@ class PositionManager:
         trade = Trade(
             position_id=position.id,
             symbol=position.symbol,
+            asset_class=position.asset_class,
             entry_price=position.entry_price,
             exit_price=exit_price,
             quantity=position.quantity,

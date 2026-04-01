@@ -155,11 +155,11 @@
           <h4>{{ entry.key }}</h4>
           <div class="comparison-row">
             <span class="label">Signals</span>
-            <span class="value">{{ entry.value.count }}</span>
+            <span class="value">{{ $any(entry.value).count }}</span>
           </div>
           <div class="comparison-row">
             <span class="label">Avg Confidence</span>
-            <span class="value">{{ formatPercent(entry.value.avg_confidence) }}</span>
+            <span class="value">{{ formatPercent($any(entry.value).avg_confidence) }}</span>
           </div>
         </div>
       </div>

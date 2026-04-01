@@ -17,11 +17,14 @@ router = APIRouter(prefix="/orders", tags=["orders"])
 async def list_orders(
     symbol: str | None = Query(None),
     status: str | None = Query(None),
+    asset_class: str | None = Query(None, pattern="^(CRYPTO|STOCKS)$"),
     limit: int = Query(default=50, ge=1, le=200),
     db: AsyncSession = Depends(get_db_session),
 ):
     repo = OrderRepository(db)
-    if status:
+    if asset_class:
+        orders = await repo.get_by_asset_class(asset_class, limit=limit)
+    elif status:
         orders = await repo.get_by_status(OrderStatus(status), limit=limit)
     elif symbol:
         orders = await repo.get_by_symbol(symbol.upper(), limit=limit)

@@ -53,3 +53,13 @@ class OrderRepository(BaseRepository[Order]):
         )
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
+
+    async def get_by_asset_class(self, asset_class: str, limit: int = 100) -> list[Order]:
+        stmt = (
+            select(Order)
+            .where(Order.asset_class == asset_class)
+            .order_by(Order.created_at.desc())
+            .limit(limit)
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())

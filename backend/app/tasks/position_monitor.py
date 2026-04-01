@@ -4,7 +4,8 @@ from decimal import Decimal
 
 from app.core.logging import get_logger
 from app.core.redis import get_redis
-from app.domain.enums import ExecutionMode, PositionStatus
+from app.domain.enums import AssetClass, ExecutionMode, PositionStatus
+from app.exchange.market_hours import is_us_market_open
 from app.pipeline.position_manager.position_manager import PositionManager
 from app.repositories.position_repo import PositionRepository
 from app.services.portfolio_service import PortfolioService
@@ -64,6 +65,13 @@ class PositionMonitor:
             open_positions = await repo.get_open_for_update()
 
             for position in open_positions:
+                # Skip stock positions outside US market hours
+                if (
+                    getattr(position, "asset_class", "CRYPTO") == AssetClass.STOCKS.value
+                    and not is_us_market_open()
+                ):
+                    continue
+
                 current_price = await self._get_price(position.symbol)
                 if current_price is None:
                     # Track stale price count for auto-halt

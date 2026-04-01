@@ -16,7 +16,10 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
-from app.ml.config import DOWNLOAD_START, ML_DATA_DIR, RAW_DIR, SYMBOLS, PRIMARY_TIMEFRAME, SUPPORT_TIMEFRAMES
+from app.ml.config import (
+    DOWNLOAD_START, ML_DATA_DIR, RAW_DIR, SYMBOLS, PRIMARY_TIMEFRAME,
+    SUPPORT_TIMEFRAMES, STOCK_SYMBOLS, STOCK_PRIMARY_TIMEFRAME, STOCK_SUPPORT_TIMEFRAMES,
+)
 from app.models.kline_history import KlineHistory
 
 logger = get_logger(__name__)
@@ -253,6 +256,106 @@ class HistoricalDataDownloader:
         if not df.empty:
             df.set_index("open_time", inplace=True)
         return df
+
+    async def download_stock_symbol(
+        self,
+        symbol: str,
+        interval: str = "1d",
+        start_date: str = DOWNLOAD_START,
+    ) -> int:
+        """Download historical bars from Alpaca for a stock symbol.
+
+        Returns the number of new klines inserted.
+        """
+        from alpaca.data.historical import StockHistoricalDataClient
+        from alpaca.data.requests import StockBarsRequest
+        from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
+
+        from app.config import settings
+
+        timeframe_map = {
+            "1h": TimeFrame(1, TimeFrameUnit.Hour),
+            "4h": TimeFrame(4, TimeFrameUnit.Hour),
+            "1d": TimeFrame(1, TimeFrameUnit.Day),
+        }
+        tf = timeframe_map.get(interval)
+        if tf is None:
+            raise ValueError(f"Unsupported interval for stocks: {interval}")
+
+        client = StockHistoricalDataClient(
+            api_key=settings.alpaca_api_key,
+            secret_key=settings.alpaca_api_secret,
+        )
+
+        # Check last downloaded timestamp
+        last_ts = await self._get_last_timestamp(symbol, interval)
+        if last_ts:
+            interval_ms = INTERVAL_MS.get(interval, 86_400_000)
+            start_dt = last_ts + pd.Timedelta(milliseconds=interval_ms)
+            logger.info("download_stock_resuming", symbol=symbol, from_date=start_dt.isoformat())
+        else:
+            start_dt = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            logger.info("download_stock_starting", symbol=symbol, from_date=start_date)
+
+        request = StockBarsRequest(
+            symbol_or_symbols=symbol,
+            timeframe=tf,
+            start=start_dt,
+        )
+        bars_response = client.get_stock_bars(request)
+        bars = bars_response[symbol] if symbol in bars_response else []
+
+        if not bars:
+            logger.info("download_stock_no_data", symbol=symbol)
+            return 0
+
+        # Convert to kline rows and insert
+        rows = []
+        for bar in bars:
+            duration_ms = INTERVAL_MS.get(interval, 86_400_000)
+            rows.append({
+                "id": uuid4(),
+                "symbol": symbol,
+                "interval": interval,
+                "open_time": bar.timestamp,
+                "open": Decimal(str(bar.open)),
+                "high": Decimal(str(bar.high)),
+                "low": Decimal(str(bar.low)),
+                "close": Decimal(str(bar.close)),
+                "volume": Decimal(str(bar.volume)),
+                "close_time": bar.timestamp + pd.Timedelta(milliseconds=duration_ms),
+            })
+
+        if not rows:
+            return 0
+
+        stmt = pg_insert(KlineHistory).values(rows)
+        stmt = stmt.on_conflict_do_nothing(
+            index_elements=["symbol", "interval", "open_time"]
+        )
+        result = await self._session.execute(stmt)
+        await self._session.commit()
+
+        total = result.rowcount or 0
+        logger.info("download_stock_complete", symbol=symbol, interval=interval, new_klines=total)
+        return total
+
+    async def download_all_stocks(
+        self,
+        symbols: list[str] | None = None,
+        intervals: list[str] | None = None,
+    ) -> dict[str, int]:
+        """Download data for all configured stock symbols."""
+        symbols = symbols or STOCK_SYMBOLS
+        intervals = intervals or [STOCK_PRIMARY_TIMEFRAME] + STOCK_SUPPORT_TIMEFRAMES
+
+        results = {}
+        for symbol in symbols:
+            for interval in intervals:
+                key = f"{symbol}_{interval}"
+                count = await self.download_stock_symbol(symbol, interval)
+                results[key] = count
+        return results
 
     async def get_stats(self) -> list[dict]:
         """Get download stats per symbol/interval."""

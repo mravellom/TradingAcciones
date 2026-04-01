@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, Index, Numeric, String, func
+from sqlalchemy import DateTime, Index, Numeric, String, func, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -13,6 +13,9 @@ class Signal(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __tablename__ = "signals"
 
     symbol: Mapped[str] = mapped_column(String(20), nullable=False)
+    asset_class: Mapped[str] = mapped_column(
+        String(10), nullable=False, server_default=text("'CRYPTO'")
+    )
     signal_type: Mapped[str] = mapped_column(String(10), nullable=False)  # BUY/SELL/HOLD
     confidence: Mapped[Decimal] = mapped_column(Numeric(5, 4), nullable=False)
     timeframe: Mapped[str] = mapped_column(String(10), nullable=False)

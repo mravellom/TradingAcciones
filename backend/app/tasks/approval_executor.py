@@ -136,6 +136,7 @@ class ApprovalExecutor:
                     bid=snapshot["bid"],
                     ask=snapshot["ask"],
                     volume_24h=snapshot["volume_24h"],
+                    asset_class=snapshot.get("asset_class", "CRYPTO"),
                 )
                 guard_result = await self._guard.validate(
                     order_price=order.requested_price,

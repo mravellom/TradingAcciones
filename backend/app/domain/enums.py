@@ -93,6 +93,11 @@ class EventType(str, Enum):
     STRATEGY_DEACTIVATED = "STRATEGY_DEACTIVATED"
 
 
+class AssetClass(str, Enum):
+    CRYPTO = "CRYPTO"
+    STOCKS = "STOCKS"
+
+
 class AggregateType(str, Enum):
     SIGNAL = "SIGNAL"
     ORDER = "ORDER"

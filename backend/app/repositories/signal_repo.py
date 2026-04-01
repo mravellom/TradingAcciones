@@ -24,6 +24,18 @@ class SignalRepository(BaseRepository[Signal]):
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
+    async def get_by_asset_class(
+        self, asset_class: str, limit: int = 50
+    ) -> list[Signal]:
+        stmt = (
+            select(Signal)
+            .where(Signal.asset_class == asset_class)
+            .order_by(Signal.created_at.desc())
+            .limit(limit)
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
     async def get_by_strategy(
         self, strategy_id: uuid.UUID, limit: int = 50
     ) -> list[Signal]:

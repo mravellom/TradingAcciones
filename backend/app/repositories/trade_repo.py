@@ -22,6 +22,16 @@ class TradeRepository(BaseRepository[Trade]):
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
+    async def get_by_asset_class(self, asset_class: str, limit: int = 100) -> list[Trade]:
+        stmt = (
+            select(Trade)
+            .where(Trade.asset_class == asset_class)
+            .order_by(Trade.closed_at.desc())
+            .limit(limit)
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
     async def get_by_strategy(
         self, strategy_id: uuid.UUID, limit: int = 100
     ) -> list[Trade]:

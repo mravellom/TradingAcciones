@@ -7,6 +7,11 @@
     <span class="ws-status">
       WS: {{ ws.connected ? 'Connected' : 'Disconnected' }}
     </span>
+    <span class="market-status" *ngIf="health.alpaca?.enabled">
+      <span class="status-dot" [class.healthy]="health.alpaca?.market_open"
+            [class.halted]="!health.alpaca?.market_open"></span>
+      US Market: {{ health.alpaca?.market_open ? 'Open' : 'Closed' }}
+    </span>
   </div>
 
   <!-- Portfolio Cards -->
@@ -76,7 +81,12 @@
       </thead>
       <tbody>
         <tr *ngFor="let pos of openPositions">
-          <td><strong>{{ pos.symbol }}</strong></td>
+          <td>
+            <strong>{{ pos.symbol }}</strong>
+            <span class="badge badge-asset" [class.badge-stocks]="pos.asset_class === 'STOCKS'">
+              {{ pos.asset_class === 'STOCKS' ? 'STK' : 'CRY' }}
+            </span>
+          </td>
           <td>{{ formatUsd(pos.entry_price) }}</td>
           <td>{{ formatUsd(pos.current_price) }}</td>
           <td>{{ pos.quantity }}</td>
@@ -108,7 +118,12 @@
       </thead>
       <tbody>
         <tr *ngFor="let trade of recentTrades">
-          <td><strong>{{ trade.symbol }}</strong></td>
+          <td>
+            <strong>{{ trade.symbol }}</strong>
+            <span class="badge badge-asset" [class.badge-stocks]="trade.asset_class === 'STOCKS'">
+              {{ trade.asset_class === 'STOCKS' ? 'STK' : 'CRY' }}
+            </span>
+          </td>
           <td>{{ formatUsd(trade.entry_price) }}</td>
           <td>{{ formatUsd(trade.exit_price) }}</td>
           <td [class]="getPnlClass(trade.pnl)">$ {{ formatUsd(trade.pnl) }}</td>
@@ -138,7 +153,12 @@
       </thead>
       <tbody>
         <tr *ngFor="let sig of recentSignals">
-          <td><strong>{{ sig.symbol }}</strong></td>
+          <td>
+            <strong>{{ sig.symbol }}</strong>
+            <span class="badge badge-asset" [class.badge-stocks]="sig.asset_class === 'STOCKS'">
+              {{ sig.asset_class === 'STOCKS' ? 'STK' : 'CRY' }}
+            </span>
+          </td>
           <td>
             <span class="badge" [class.badge-buy]="sig.signal_type === 'BUY'"
                   [class.badge-sell]="sig.signal_type === 'SELL'">

@@ -13,10 +13,12 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.core.logging import get_logger
 from app.core.redis import get_redis
 from app.domain.enums import (
     AggregateType,
+    AssetClass,
     EventType,
     ExecutionMode,
     OrderSide,
@@ -223,8 +225,14 @@ class TradingPipeline:
             quantity = guard_result.adjusted_quantity or sizing.quantity
 
             # 7. Create signal + order records
+            asset_class = (
+                AssetClass.STOCKS.value
+                if intent.symbol in settings.stock_symbols
+                else AssetClass.CRYPTO.value
+            )
             signal = SignalModel(
                 symbol=intent.symbol,
+                asset_class=asset_class,
                 signal_type=intent.action.value,
                 confidence=intent.confidence,
                 timeframe=intent.timeframe,
@@ -248,6 +256,7 @@ class TradingPipeline:
             order = Order(
                 signal_id=signal.id,
                 symbol=intent.symbol,
+                asset_class=asset_class,
                 side=OrderSide.BUY.value if intent.action.value == "BUY" else OrderSide.SELL.value,
                 order_type="MARKET",
                 status=initial_status,
@@ -349,6 +358,7 @@ class TradingPipeline:
                 strategy_id=intent.strategy_id,
                 signal_confidence=intent.confidence,
                 execution_mode=self._executor.mode.value,
+                asset_class=asset_class,
             )
 
             # 10b. Place exchange-level SL/TP for LIVE mode

@@ -26,6 +26,7 @@ class OrderCreate(OrderBase):
 
 class OrderResponse(OrderBase):
     id: uuid.UUID
+    asset_class: str = "CRYPTO"
     status: OrderStatus
     filled_qty: Decimal
     avg_fill_price: Decimal | None = None

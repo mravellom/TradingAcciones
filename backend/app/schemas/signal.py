@@ -26,6 +26,7 @@ class SignalCreate(SignalBase):
 
 class SignalResponse(SignalBase):
     id: uuid.UUID
+    asset_class: str = "CRYPTO"
     created_at: datetime
     updated_at: datetime
 

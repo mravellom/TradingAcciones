@@ -72,6 +72,15 @@ body {
 .badge-sell { background: rgba(248, 81, 73, 0.2); color: #f85149; }
 .badge-open { background: rgba(88, 166, 255, 0.2); color: #58a6ff; }
 .badge-closed { background: rgba(139, 148, 158, 0.2); color: #8b949e; }
+.badge-asset {
+  font-size: 9px;
+  padding: 1px 4px;
+  margin-left: 4px;
+  vertical-align: middle;
+  background: rgba(247, 153, 57, 0.2);
+  color: #f79939;
+  &.badge-stocks { background: rgba(88, 166, 255, 0.2); color: #58a6ff; }
+}
 
 // Button
 .btn {

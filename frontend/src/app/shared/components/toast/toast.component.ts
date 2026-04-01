@@ -10,9 +10,11 @@ import { NotificationService } from '../../../core/services/notification.service
   styleUrl: './toast.component.scss',
 })
 export class ToastComponent {
-  toasts$ = this.notificationService.toasts$;
+  toasts$;
 
-  constructor(private notificationService: NotificationService) {}
+  constructor(private notificationService: NotificationService) {
+    this.toasts$ = this.notificationService.toasts$;
+  }
 
   dismiss(id: number) {
     this.notificationService.dismiss(id);

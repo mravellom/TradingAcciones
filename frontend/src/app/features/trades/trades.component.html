@@ -29,7 +29,12 @@
       </thead>
       <tbody>
         <tr *ngFor="let t of trades">
-          <td><strong>{{ t.symbol }}</strong></td>
+          <td>
+            <strong>{{ t.symbol }}</strong>
+            <span class="badge badge-asset" [class.badge-stocks]="t.asset_class === 'STOCKS'">
+              {{ t.asset_class === 'STOCKS' ? 'STK' : 'CRY' }}
+            </span>
+          </td>
           <td>{{ formatUsd(t.entry_price) }}</td>
           <td>{{ formatUsd(t.exit_price) }}</td>
           <td>{{ t.quantity }}</td>
@@ -63,7 +68,12 @@
       </thead>
       <tbody>
         <tr *ngFor="let o of orders">
-          <td><strong>{{ o.symbol }}</strong></td>
+          <td>
+            <strong>{{ o.symbol }}</strong>
+            <span class="badge badge-asset" [class.badge-stocks]="o.asset_class === 'STOCKS'">
+              {{ o.asset_class === 'STOCKS' ? 'STK' : 'CRY' }}
+            </span>
+          </td>
           <td>
             <span class="badge" [class.badge-buy]="o.side === 'BUY'"
                   [class.badge-sell]="o.side === 'SELL'">{{ o.side }}</span>

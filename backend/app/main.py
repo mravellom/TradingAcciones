@@ -57,6 +57,33 @@ async def lifespan(app: FastAPI):
 
     await redis.set("system:status", "RUNNING")
 
+    # Initialize Alpaca for US stocks if enabled
+    alpaca_client = None
+    alpaca_ws = None
+    alpaca_ws_task = None
+    if settings.alpaca_enabled:
+        try:
+            from app.exchange.alpaca_client import AlpacaClient
+            from app.exchange.alpaca_ws import AlpacaWebSocket
+
+            alpaca_client = AlpacaClient()
+            await alpaca_client.connect()
+            logger.info("alpaca_client_connected")
+
+            alpaca_ws = AlpacaWebSocket()
+            for sym in settings.stock_symbols:
+                await alpaca_ws.subscribe_ticker(sym)
+            alpaca_ws_task = asyncio.create_task(alpaca_ws.start())
+            logger.info("alpaca_ws_started", symbols=settings.stock_symbols)
+        except Exception as e:
+            logger.error("alpaca_startup_failed", error=str(e))
+            alpaca_client = None
+            alpaca_ws = None
+
+    # Store alpaca_client in app state for dependency injection
+    app_instance = app  # type: ignore
+    app_instance.state.alpaca_client = alpaca_client
+
     # Start runtime reconciler as background task (LIVE mode only)
     reconciler_task = None
     reconciler = None
@@ -82,6 +109,24 @@ async def lifespan(app: FastAPI):
 
     # Graceful Shutdown
     logger.info("shutting_down_trading_platform")
+
+    # Stop Alpaca WebSocket
+    if alpaca_ws_task is not None and alpaca_ws is not None:
+        try:
+            await alpaca_ws.stop()
+            alpaca_ws_task.cancel()
+            try:
+                await alpaca_ws_task
+            except asyncio.CancelledError:
+                pass
+            logger.info("alpaca_ws_stopped")
+        except Exception:
+            pass
+    if alpaca_client is not None:
+        try:
+            await alpaca_client.disconnect()
+        except Exception:
+            pass
 
     # Stop runtime reconciler
     if reconciler_task is not None and reconciler is not None:

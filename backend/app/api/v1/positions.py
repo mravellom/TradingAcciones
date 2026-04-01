@@ -17,11 +17,16 @@ router = APIRouter(prefix="/positions", tags=["positions"])
 
 @router.get("/", response_model=list[PositionResponse])
 async def list_positions(
+    asset_class: str | None = Query(None, pattern="^(CRYPTO|STOCKS)$"),
     limit: int = Query(default=50, ge=1, le=200),
     db: AsyncSession = Depends(get_db_session),
 ):
     repo = PositionRepository(db)
-    return await repo.get_all(limit=limit)
+    if asset_class:
+        positions = await repo.get_by_asset_class(asset_class, limit=limit)
+    else:
+        positions = await repo.get_all(limit=limit)
+    return positions
 
 
 @router.get("/open", response_model=list[PositionResponse])

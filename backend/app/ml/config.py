@@ -8,12 +8,19 @@ RAW_DIR = ML_DATA_DIR / "raw"
 PROCESSED_DIR = ML_DATA_DIR / "processed"
 MODELS_DIR = ML_DATA_DIR / "models"
 
-# Symbols to download and train on
+# Crypto symbols to download and train on
 SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT"]
 
-# Timeframes
+# Stock symbols (S&P 500 / NASDAQ)
+STOCK_SYMBOLS = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "TSLA", "META", "SPY"]
+
+# Crypto timeframes
 PRIMARY_TIMEFRAME = "1h"
 SUPPORT_TIMEFRAMES = ["4h", "1d"]
+
+# Stock timeframes
+STOCK_PRIMARY_TIMEFRAME = "1d"
+STOCK_SUPPORT_TIMEFRAMES = ["1h"]
 
 # Historical data range
 DOWNLOAD_START = "2020-01-01"
@@ -25,6 +32,19 @@ class LabelConfig:
     tp_pct: float = 0.02          # Take Profit: +2%
     sl_pct: float = 0.01          # Stop Loss: -1%
     horizon_bars: int = 12        # Max lookahead: 12 bars (12h for 1h timeframe)
+    min_samples_per_class: int = 100
+
+
+@dataclass
+class StockLabelConfig:
+    """Triple Barrier Labeling for stocks (less volatile than crypto).
+
+    Stocks move ~1% daily vs crypto 3-5%, so barriers are tighter
+    and horizon is shorter (daily bars, 5 trading days lookahead).
+    """
+    tp_pct: float = 0.015         # Take Profit: +1.5%
+    sl_pct: float = 0.0075        # Stop Loss: -0.75% (keeps 2:1 ratio)
+    horizon_bars: int = 5         # 5 trading days lookahead
     min_samples_per_class: int = 100
 
 
@@ -43,6 +63,26 @@ class FeatureConfig:
     obv_slope_period: int = 10
     rolling_std_period: int = 20
     normalization_window: int = 90  # Rolling window for normalization
+
+
+@dataclass
+class StockFeatureConfig:
+    """Feature engineering parameters tuned for stocks.
+
+    Stocks use longer periods (less noise) and adjusted windows.
+    """
+    rsi_periods: list[int] = field(default_factory=lambda: [7, 14, 21])
+    sma_fast: int = 10
+    sma_slow: int = 30
+    ema_fast: int = 12
+    ema_slow: int = 26
+    atr_period: int = 14
+    bb_period: int = 20
+    adx_period: int = 14
+    volume_ma_period: int = 20
+    obv_slope_period: int = 10
+    rolling_std_period: int = 20
+    normalization_window: int = 120  # 6 months of daily bars
 
 
 @dataclass

@@ -13,6 +13,9 @@ class Position(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __tablename__ = "positions"
 
     symbol: Mapped[str] = mapped_column(String(20), nullable=False)
+    asset_class: Mapped[str] = mapped_column(
+        String(10), nullable=False, server_default=text("'CRYPTO'")
+    )
     side: Mapped[str] = mapped_column(String(10), nullable=False, default="LONG")
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="OPEN")
 

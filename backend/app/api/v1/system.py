@@ -39,12 +39,23 @@ async def health_check(
     # System status
     system_status = await redis.get("system:status") or "RUNNING"
 
+    # Alpaca / US market status
+    from app.config import settings
+    alpaca_info = {"enabled": settings.alpaca_enabled}
+    if settings.alpaca_enabled:
+        from app.exchange.market_hours import is_us_market_open
+        ws_connected = await redis.get("ws:stocks:connected") or "0"
+        alpaca_info["market_open"] = is_us_market_open()
+        alpaca_info["ws_connected"] = ws_connected == "1"
+        alpaca_info["stock_symbols"] = settings.stock_symbols
+
     all_healthy = all(c["status"] == "healthy" for c in checks.values())
 
     return {
         "status": "healthy" if all_healthy else "degraded",
         "system_status": system_status,
         "checks": checks,
+        "alpaca": alpaca_info,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 

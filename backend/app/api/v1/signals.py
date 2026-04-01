@@ -13,11 +13,14 @@ router = APIRouter(prefix="/signals", tags=["signals"])
 @router.get("/", response_model=list[SignalResponse])
 async def list_signals(
     symbol: str | None = Query(None),
+    asset_class: str | None = Query(None, pattern="^(CRYPTO|STOCKS)$"),
     limit: int = Query(default=50, ge=1, le=200),
     db: AsyncSession = Depends(get_db_session),
 ):
     repo = SignalRepository(db)
-    if symbol:
+    if asset_class:
+        signals = await repo.get_by_asset_class(asset_class, limit=limit)
+    elif symbol:
         signals = await repo.get_by_symbol(symbol.upper(), limit=limit)
     else:
         signals = await repo.get_all(limit=limit)

@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, Numeric, String
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, Numeric, String, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -16,6 +16,9 @@ class Trade(Base, UUIDPrimaryKeyMixin):
         UUID(as_uuid=True), ForeignKey("positions.id"), nullable=False
     )
     symbol: Mapped[str] = mapped_column(String(20), nullable=False)
+    asset_class: Mapped[str] = mapped_column(
+        String(10), nullable=False, server_default=text("'CRYPTO'")
+    )
 
     entry_price: Mapped[Decimal] = mapped_column(Numeric(20, 8), nullable=False)
     exit_price: Mapped[Decimal] = mapped_column(Numeric(20, 8), nullable=False)

@@ -37,20 +37,39 @@ class MarketSnapshot:
     bid: Decimal
     ask: Decimal
     volume_24h: Decimal
+    asset_class: str = "CRYPTO"
 
 
 class ExecutionGuard:
-    """Pre-execution validation with market sanity checks."""
+    """Pre-execution validation with market sanity checks.
+
+    Supports per-asset-class thresholds (crypto vs stocks).
+    """
 
     def __init__(
         self,
         max_price_drift_pct: Decimal = Decimal("0.005"),
         max_spread_pct: Decimal = Decimal("0.003"),
         min_volume_24h: Decimal = Decimal("100000"),
+        stock_max_price_drift_pct: Decimal = Decimal("0.002"),
+        stock_max_spread_pct: Decimal = Decimal("0.001"),
+        stock_min_volume_24h: Decimal = Decimal("1000000"),
     ):
-        self._max_price_drift = max_price_drift_pct
-        self._max_spread = max_spread_pct
-        self._min_volume = min_volume_24h
+        self._crypto_thresholds = {
+            "max_price_drift": max_price_drift_pct,
+            "max_spread": max_spread_pct,
+            "min_volume": min_volume_24h,
+        }
+        self._stock_thresholds = {
+            "max_price_drift": stock_max_price_drift_pct,
+            "max_spread": stock_max_spread_pct,
+            "min_volume": stock_min_volume_24h,
+        }
+
+    def _thresholds(self, asset_class: str) -> dict:
+        if asset_class == "STOCKS":
+            return self._stock_thresholds
+        return self._crypto_thresholds
 
     async def validate(
         self,
@@ -60,6 +79,7 @@ class ExecutionGuard:
         side: str = "BUY",
     ) -> GuardResult:
         """Validate market conditions just before execution."""
+        t = self._thresholds(market.asset_class)
 
         # 0. Market data sanity checks
         sanity = self._check_market_sanity(market)
@@ -71,7 +91,7 @@ class ExecutionGuard:
             drift = (market.price - order_price) / order_price  # Signed drift
             abs_drift = abs(drift)
 
-            if abs_drift > self._max_price_drift:
+            if abs_drift > t["max_price_drift"]:
                 # For BUY: positive drift (price went up) is unfavorable
                 # For SELL: negative drift (price went down) is unfavorable
                 unfavorable = (side == "BUY" and drift > 0) or (side == "SELL" and drift < 0)
@@ -86,7 +106,7 @@ class ExecutionGuard:
                     )
                     return GuardResult.reject(
                         f"Unfavorable price drift {drift:.2%} for {side} "
-                        f"(max {self._max_price_drift:.2%})"
+                        f"(max {t['max_price_drift']:.2%})"
                     )
                 # Favorable drift > threshold: log warning but allow
                 logger.info(
@@ -98,17 +118,17 @@ class ExecutionGuard:
         # 2. Spread check
         if market.bid > 0:
             spread = (market.ask - market.bid) / market.bid
-            if spread > self._max_spread:
+            if spread > t["max_spread"]:
                 logger.info("guard_spread_wide", spread=f"{spread:.4%}")
                 return GuardResult.reject(
-                    f"Spread {spread:.2%} exceeds max {self._max_spread:.2%}"
+                    f"Spread {spread:.2%} exceeds max {t['max_spread']:.2%}"
                 )
 
         # 3. Volume check
-        if market.volume_24h < self._min_volume:
+        if market.volume_24h < t["min_volume"]:
             logger.info("guard_low_volume", volume=str(market.volume_24h))
             return GuardResult.reject(
-                f"24h volume {market.volume_24h} below minimum {self._min_volume}"
+                f"24h volume {market.volume_24h} below minimum {t['min_volume']}"
             )
 
         logger.info("guard_approved", symbol=market.symbol, side=side)

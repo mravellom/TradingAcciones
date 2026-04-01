@@ -1,11 +1,14 @@
 from fastapi import APIRouter, Query
 
+from app.config import settings
+from app.exchange.base import ExchangeClient
 from app.exchange.binance_client import BinanceClient
 
 router = APIRouter(prefix="/market", tags=["market"])
 
-# Shared client instance (initialized on first use)
+# Shared client instances (initialized on first use)
 _binance: BinanceClient | None = None
+_alpaca: ExchangeClient | None = None
 
 
 async def _get_binance() -> BinanceClient:
@@ -16,11 +19,23 @@ async def _get_binance() -> BinanceClient:
     return _binance
 
 
+async def _get_exchange(symbol: str) -> ExchangeClient:
+    """Route to correct exchange based on symbol."""
+    if settings.alpaca_enabled and symbol.upper() in settings.stock_symbols:
+        global _alpaca
+        if _alpaca is None:
+            from app.exchange.alpaca_client import AlpacaClient
+            _alpaca = AlpacaClient()
+            await _alpaca.connect()
+        return _alpaca
+    return await _get_binance()
+
+
 @router.get("/ticker/{symbol}")
 async def get_ticker(symbol: str):
     """Get current ticker data (price, bid, ask, volume) for a symbol."""
-    binance = await _get_binance()
-    ticker = await binance.get_ticker(symbol.upper())
+    exchange = await _get_exchange(symbol)
+    ticker = await exchange.get_ticker(symbol.upper())
     return {
         "symbol": ticker.symbol,
         "price": str(ticker.price),
@@ -34,12 +49,12 @@ async def get_ticker(symbol: str):
 @router.get("/klines/{symbol}")
 async def get_klines(
     symbol: str,
-    interval: str = Query(default="1h", pattern="^(1m|5m|15m|30m|1h|4h|1d)$"),
+    interval: str = Query(default="1h", pattern="^(1m|5m|15m|30m|1h|4h|1d|1w)$"),
     limit: int = Query(default=100, ge=1, le=1000),
 ):
     """Get candlestick/kline data for a symbol with configurable interval and limit."""
-    binance = await _get_binance()
-    klines = await binance.get_klines(symbol.upper(), interval, limit)
+    exchange = await _get_exchange(symbol)
+    klines = await exchange.get_klines(symbol.upper(), interval, limit)
     return [
         {
             "open_time": k.open_time.isoformat(),

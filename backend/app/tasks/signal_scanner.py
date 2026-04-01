@@ -4,9 +4,11 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.core.logging import get_logger
-from app.domain.enums import AggregateType, EventType, SignalType
+from app.domain.enums import AggregateType, AssetClass, EventType, SignalType
 from app.exchange.base import ExchangeClient
+from app.exchange.market_hours import is_us_market_open
 from app.models.signal import Signal as SignalModel
 from app.pipeline.strategy.base import Strategy
 from app.pipeline.strategy.runner import StrategyRunner
@@ -72,6 +74,10 @@ class SignalScanner:
             strategy_symbols[strategy.id] = s_symbols
             symbols.update(s_symbols)
 
+        # Add stock symbols if Alpaca is enabled and market is open
+        if settings.alpaca_enabled and is_us_market_open():
+            symbols.update(settings.stock_symbols)
+
         for symbol in symbols:
             await self._scan_symbol(symbol)
 
@@ -108,8 +114,14 @@ class SignalScanner:
     async def _save_signal(self, intent, timeframe: str) -> None:
         """Persist signal to DB and emit event."""
         async with self._session_factory() as session:
+            asset_class = (
+                AssetClass.STOCKS.value
+                if intent.symbol in settings.stock_symbols
+                else AssetClass.CRYPTO.value
+            )
             signal = SignalModel(
                 symbol=intent.symbol,
+                asset_class=asset_class,
                 signal_type=intent.action.value,
                 confidence=intent.confidence,
                 timeframe=timeframe,

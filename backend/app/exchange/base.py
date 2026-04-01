@@ -30,17 +30,32 @@ class Kline:
 @dataclass
 class SymbolInfo:
     symbol: str
-    base_asset: str       # BTC
-    quote_asset: str      # USDT
+    base_asset: str       # BTC / AAPL
+    quote_asset: str      # USDT / USD
     min_qty: Decimal
     max_qty: Decimal
     step_size: Decimal    # lot size increment
     min_notional: Decimal # minimum order value
     tick_size: Decimal    # price increment
+    asset_class: str = "CRYPTO"
+
+
+@dataclass
+class PriceTick:
+    """Real-time price tick from WebSocket feed."""
+    symbol: str
+    price: Decimal
+    bid: Decimal
+    ask: Decimal
+    timestamp: datetime
 
 
 class ExchangeClient(ABC):
-    """Abstract exchange adapter. Implement for each exchange (Binance, Bybit, etc.)."""
+    """Abstract exchange adapter. Implement for each exchange (Binance, Alpaca, etc.)."""
+
+    @property
+    def asset_class(self) -> str:
+        return "CRYPTO"
 
     @abstractmethod
     async def connect(self) -> None:

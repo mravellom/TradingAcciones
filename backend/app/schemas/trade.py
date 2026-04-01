@@ -11,6 +11,7 @@ class TradeResponse(BaseModel):
     id: uuid.UUID
     position_id: uuid.UUID
     symbol: str
+    asset_class: str = "CRYPTO"
     entry_price: Decimal
     exit_price: Decimal
     quantity: Decimal

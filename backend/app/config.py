@@ -23,10 +23,10 @@ class Settings(BaseSettings):
     # CORS
     cors_origins: list[str] = ["http://localhost:4200"]
 
-    @field_validator("cors_origins", mode="before")
+    @field_validator("cors_origins", "stock_symbols", mode="before")
     @classmethod
-    def parse_cors_origins(cls, v):
-        """Parse comma-separated CORS origins from env var."""
+    def parse_comma_separated_list(cls, v):
+        """Parse comma-separated list from env var."""
         if isinstance(v, str):
             return [o.strip() for o in v.split(",") if o.strip()]
         return v
@@ -46,6 +46,19 @@ class Settings(BaseSettings):
     binance_api_secret: str = ""
     binance_testnet: bool = True
 
+    # Alpaca (US Stocks)
+    alpaca_enabled: bool = False
+    alpaca_api_key: str = ""
+    alpaca_api_secret: str = ""
+    alpaca_base_url: str = "https://paper-api.alpaca.markets"
+    alpaca_data_url: str = "https://data.alpaca.markets"
+    alpaca_ws_url: str = "wss://stream.data.alpaca.markets/v2/iex"
+    stock_symbols: list[str] = [
+        "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA",
+        "TSLA", "META", "JPM", "V", "SPY",
+    ]
+    stock_scan_interval: int = 300  # 5 min
+
     # Execution
     execution_mode: str = "PAPER"  # PAPER | LIVE
     paper_initial_balance: float = 10000.0
@@ -64,10 +77,15 @@ class Settings(BaseSettings):
     risk_max_exposure_per_symbol_pct: float = 0.10  # 10%
     risk_per_trade_pct: float = 0.01             # 1%
 
-    # Execution Guard
+    # Execution Guard (Crypto)
     guard_max_price_drift_pct: float = 0.005     # 0.5%
     guard_max_spread_pct: float = 0.003          # 0.3%
     guard_min_volume_24h: float = 100000.0       # USD
+
+    # Execution Guard (Stocks)
+    guard_stock_max_price_drift_pct: float = 0.002   # 0.2%
+    guard_stock_max_spread_pct: float = 0.001         # 0.1%
+    guard_stock_min_volume_24h: float = 1000000.0     # USD
 
     # Health monitor
     health_check_interval_seconds: int = 5
@@ -87,6 +105,8 @@ class Settings(BaseSettings):
             "api_key": "api_key",
             "binance_api_key": "binance_api_key",
             "binance_api_secret": "binance_api_secret",
+            "alpaca_api_key": "alpaca_api_key",
+            "alpaca_api_secret": "alpaca_api_secret",
             "telegram_bot_token": "telegram_bot_token",
         }
         for secret_name, field_name in secret_fields.items():

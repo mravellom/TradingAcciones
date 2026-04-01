@@ -1,7 +1,6 @@
 import asyncio
 import json
 from collections.abc import AsyncIterator
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
 
@@ -9,6 +8,7 @@ import websockets
 
 from app.core.logging import get_logger
 from app.core.redis import get_redis
+from app.exchange.base import PriceTick
 
 logger = get_logger(__name__)
 
@@ -16,15 +16,6 @@ BINANCE_WS_URL = "wss://stream.binance.com:9443/ws"
 BINANCE_TESTNET_WS_URL = "wss://testnet.binance.vision/ws"
 
 MAX_RECONNECT_DELAY = 60  # seconds
-
-
-@dataclass
-class PriceTick:
-    symbol: str
-    price: Decimal
-    bid: Decimal
-    ask: Decimal
-    timestamp: datetime
 
 
 class BinanceWebSocket:

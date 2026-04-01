@@ -10,9 +10,12 @@ export interface Portfolio {
   updated_at: string;
 }
 
+export type AssetClass = 'CRYPTO' | 'STOCKS';
+
 export interface Signal {
   id: string;
   symbol: string;
+  asset_class: AssetClass;
   signal_type: 'BUY' | 'SELL' | 'HOLD';
   confidence: string;
   timeframe: string;
@@ -29,6 +32,7 @@ export interface Order {
   id: string;
   signal_id: string;
   symbol: string;
+  asset_class: AssetClass;
   side: 'BUY' | 'SELL';
   order_type: 'MARKET' | 'LIMIT';
   status: string;
@@ -47,6 +51,7 @@ export interface Order {
 export interface Position {
   id: string;
   symbol: string;
+  asset_class: AssetClass;
   side: 'LONG';
   status: 'OPEN' | 'PARTIALLY_CLOSED' | 'CLOSED' | 'STOPPED_OUT';
   entry_price: string;
@@ -64,6 +69,7 @@ export interface Trade {
   id: string;
   position_id: string;
   symbol: string;
+  asset_class: AssetClass;
   entry_price: string;
   exit_price: string;
   quantity: string;
@@ -86,10 +92,18 @@ export interface RiskStatus {
   max_positions: number;
 }
 
+export interface AlpacaStatus {
+  enabled: boolean;
+  market_open?: boolean;
+  ws_connected?: boolean;
+  stock_symbols?: string[];
+}
+
 export interface HealthStatus {
   status: string;
   system_status: string;
   checks: Record<string, { status: string; error?: string }>;
+  alpaca?: AlpacaStatus;
   timestamp: string;
 }
 

@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Index, Numeric, String, func
+from sqlalchemy import DateTime, ForeignKey, Index, Numeric, String, func, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -16,6 +16,9 @@ class Order(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         UUID(as_uuid=True), ForeignKey("signals.id"), nullable=False
     )
     symbol: Mapped[str] = mapped_column(String(20), nullable=False)
+    asset_class: Mapped[str] = mapped_column(
+        String(10), nullable=False, server_default=text("'CRYPTO'")
+    )
     side: Mapped[str] = mapped_column(String(10), nullable=False)  # BUY/SELL
     order_type: Mapped[str] = mapped_column(String(10), nullable=False)  # MARKET/LIMIT
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="PENDING")
