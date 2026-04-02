@@ -21,16 +21,16 @@
 
 ### Qué es este sistema
 
-Un bot de trading automatizado para criptomonedas en Binance. Analiza el mercado con indicadores técnicos (RSI, SMA) y Machine Learning (XGBoost), toma decisiones de compra/venta, gestiona riesgo, y ejecuta operaciones — todo de forma autónoma.
+Un bot de trading automatizado para **criptomonedas (Binance)** y **acciones USA — S&P 500, NASDAQ (Alpaca)**. Analiza el mercado con indicadores técnicos (RSI, SMA) y Machine Learning (XGBoost), toma decisiones de compra/venta, gestiona riesgo, y ejecuta operaciones — todo de forma autónoma. Ambos mercados corren simultáneamente.
 
 ### Stack tecnológico
 
 ```
 Backend:   Python 3.11 + FastAPI (async)
-Frontend:  Angular 18 + TypeScript
+Frontend:  Angular 20 + TypeScript
 DB:        PostgreSQL 16
 Cache:     Redis 7
-Exchange:  Binance API (REST + WebSocket)
+Exchange:  Binance API (crypto) + Alpaca API (stocks)
 ML:        XGBoost + pandas + pandas-ta
 Container: Docker + Docker Compose
 ```
@@ -44,7 +44,7 @@ Acciones/
 │   │   ├── api/                # Endpoints REST + WebSocket
 │   │   ├── core/               # Infraestructura (DB, Redis, auth, logging)
 │   │   ├── domain/             # Reglas de negocio (enums, state machine)
-│   │   ├── exchange/           # Conexión con Binance
+│   │   ├── exchange/           # Conexión con Binance + Alpaca
 │   │   ├── ml/                 # Machine Learning completo
 │   │   ├── models/             # Modelos de base de datos (SQLAlchemy)
 │   │   ├── pipeline/           # Motor de trading (orchestrator, risk, execution)
@@ -95,14 +95,15 @@ Acciones/
          │              │                  │
     ┌────┴────┐   ┌─────┴─────┐    ┌──────┴──────┐
     │ Binance │   │PostgreSQL │    │    Redis    │
-    │  API    │   │   :5434   │    │    :6381    │
+    │ + Alpaca│   │   :5434   │    │    :6381    │
     └─────────┘   └───────────┘    └─────────────┘
 ```
 
 ### Patrón de comunicación
 
 - **Frontend → Backend**: HTTP REST para acciones, WebSocket para datos en tiempo real
-- **Backend → Binance**: REST API para órdenes y datos, WebSocket para precios en vivo
+- **Backend → Binance**: REST API para órdenes crypto y datos, WebSocket para precios en vivo
+- **Backend → Alpaca**: REST API para datos de acciones USA, WebSocket para quotes en tiempo real (solo horario de mercado 9:30-16:00 ET)
 - **Backend → PostgreSQL**: SQLAlchemy async para persistencia
 - **Backend → Redis**: Cache de precios, estado del sistema, circuit breaker, pub/sub
 
@@ -329,40 +330,71 @@ Si el código intenta una transición inválida, se lanza `InvalidStateTransitio
 
 ### 4.3 Exchange (`app/exchange/`)
 
-La conexión con Binance.
+Conexión con exchanges. Interfaz abstracta `ExchangeClient` con dos implementaciones: Binance (crypto) y Alpaca (stocks).
 
-#### `binance_client.py` — REST API
+#### `base.py` — Interfaz abstracta
+
+Todos los exchanges implementan los mismos métodos:
+- `get_ticker(symbol)` → precio actual, bid, ask, volumen
+- `get_klines(symbol, interval, limit)` → velas OHLCV históricas
+- `get_exchange_info(symbol)` → reglas de trading (min qty, tick size)
+- `ping()` → latencia
+
+Cada `SymbolInfo` incluye `asset_class` ("CRYPTO" o "STOCKS").
+
+#### `binance_client.py` — Crypto (Binance REST API)
 
 ```python
-# Obtener precio actual
 ticker = await client.get_ticker("BTCUSDT")
 # → Ticker(symbol="BTCUSDT", price=50000, bid=49999, ask=50001)
 
-# Obtener velas históricas
 klines = await client.get_klines("BTCUSDT", "1h", limit=100)
-# → [Kline(open=49000, high=50500, low=48900, close=50000, volume=1234), ...]
-
-# Información del par
-info = await client.get_exchange_info("BTCUSDT")
-# → SymbolInfo(min_qty=0.00001, step_size=0.00001, min_notional=10)
+# → [Kline(open=49000, high=50500, close=50000, volume=1234), ...]
 ```
 
-**Cache**: Los precios se cachean en Redis por 5 segundos, las klines por 30 segundos, la info del exchange por 1 hora.
+#### `alpaca_client.py` — Stocks USA (Alpaca REST API)
 
-#### `binance_ws.py` — WebSocket (tiempo real)
+```python
+ticker = await client.get_ticker("AAPL")
+# → Ticker(symbol="AAPL", price=241.39, bid=241.35, ask=241.43)
+
+klines = await client.get_klines("AAPL", "1d", limit=100)
+# → [Kline(open=238, high=243, close=241, volume=52000000), ...]
+
+info = await client.get_exchange_info("AAPL")
+# → SymbolInfo(min_qty=0.001, tick_size=0.01, asset_class="STOCKS")
+```
+
+Soporta acciones fraccionarias si el broker lo permite.
+
+**Cache**: Precios en Redis 5s, klines 30s, exchange info 1h (igual para ambos).
+
+#### `binance_ws.py` / `alpaca_ws.py` — WebSocket (tiempo real)
 
 ```
-Binance → wss://testnet.binance.vision/ws/btcusdt@bookTicker
-       → {"s":"BTCUSDT", "b":"50000.00", "a":"50001.00"}
-       → Cada ~100ms llega un precio nuevo
-       → Se guarda en Redis: price:BTCUSDT
+Binance → wss://testnet.binance.vision/ws/btcusdt@bookTicker → 24/7
+Alpaca  → wss://stream.data.alpaca.markets/v2/iex → Solo 9:30-16:00 ET
 ```
 
-Si el WebSocket se desconecta:
-1. Se marca `ws:connected=0` en Redis
+Ambos escriben en Redis con el mismo formato: `price:{SYMBOL}` → `{price, bid, ask, timestamp}`.
+
+El WebSocket de Alpaca tiene **market hours awareness**: se auto-desconecta fuera de horario y reconecta al abrir el mercado.
+
+Si cualquier WebSocket se desconecta:
+1. Se marca en Redis (`ws:connected=0` o `ws:stocks:connected=0`)
 2. Reconexión automática con backoff (1s, 2s, 4s... hasta 60s)
 3. Si llega a 60s de delay → notificación Telegram
 4. Position monitor detecta precios stale → auto-halt después de 5 consecutivos
+
+#### `market_hours.py` — Horario mercado USA
+
+```python
+is_us_market_open()    # → True si Lun-Vie 9:30-16:00 ET y no es festivo
+is_trading_day(date)   # → True si el día está en el calendario de Alpaca
+next_market_open()     # → Próximo datetime de apertura (salta fines de semana y festivos)
+```
+
+Usa el endpoint `/v2/calendar` de Alpaca para obtener los dias de trading reales (incluye festivos como Thanksgiving, Memorial Day, etc.). Cache anual en memoria.
 
 ---
 
@@ -386,7 +418,8 @@ Los modelos de base de datos. Cada uno corresponde a una tabla en PostgreSQL.
 
 | Campo | Tipo | Descripción |
 |-------|------|-------------|
-| symbol | String | BTCUSDT, ETHUSDT, etc. |
+| symbol | String | BTCUSDT, AAPL, MSFT, etc. |
+| asset_class | String | CRYPTO o STOCKS |
 | signal_type | BUY/SELL | Dirección |
 | confidence | Decimal | 0.0 a 1.0 (qué tan seguro está) |
 | entry_price | Decimal | Precio sugerido de entrada |
@@ -399,6 +432,7 @@ Los modelos de base de datos. Cada uno corresponde a una tabla en PostgreSQL.
 
 | Campo | Tipo | Descripción |
 |-------|------|-------------|
+| asset_class | String | CRYPTO o STOCKS |
 | status | String | PENDING → SUBMITTING → FILLED |
 | requested_qty | Decimal | Cantidad solicitada |
 | filled_qty | Decimal | Cantidad efectivamente ejecutada |
@@ -410,7 +444,8 @@ Los modelos de base de datos. Cada uno corresponde a una tabla en PostgreSQL.
 
 | Campo | Tipo | Descripción |
 |-------|------|-------------|
-| symbol | String | BTCUSDT |
+| symbol | String | BTCUSDT, AAPL, etc. |
+| asset_class | String | CRYPTO o STOCKS |
 | side | LONG | Solo long para spot |
 | entry_price | Decimal | Precio de compra |
 | current_price | Decimal | Último precio conocido |
@@ -488,11 +523,24 @@ Ejemplo:
 
 Transforma señales en intenciones de trading (TradeIntent).
 
-#### MomentumStrategy
+#### MomentumStrategy (Crypto)
 Usa CompositeSignalGenerator (RSI 40% + SMA 60%). Cuando la señal compuesta supera el threshold de confidence → genera TradeIntent con:
 - entry_price = precio actual
 - stop_loss = precio - 2%
 - take_profit = precio + 4%
+
+#### StockMomentumStrategy (Acciones USA)
+Variante tuneada para acciones, que son menos volátiles que crypto:
+
+| Parámetro | Crypto | Stocks |
+|-----------|--------|--------|
+| RSI oversold | 30 | **35** (acciones se recuperan antes) |
+| RSI overbought | 70 | **65** |
+| SMA rápida/lenta | 9/21 | **10/30** (tendencias más lentas) |
+| Stop Loss | 2% | **1.5%** |
+| Take Profit | 4% | **3%** |
+| Ratio TP:SL | 2:1 | 2:1 |
+| Pesos RSI/SMA | 40/60 | **50/50** |
 
 #### MLCompositeStrategy
 Usa el modelo XGBoost como señal principal (60%) complementado con RSI (20%) y SMA (20%). El ML puede generar señales BUY o SELL.
@@ -583,10 +631,13 @@ Ejemplo:
 Última verificación antes de ejecutar, mirando condiciones de mercado en tiempo real.
 
 ```
-✅ Price drift < 0.5%   → El precio no se movió demasiado desde la señal
-✅ Spread < 0.3%         → La diferencia bid-ask es razonable
-✅ Volume 24h > $100K    → Hay suficiente liquidez
-✅ Precios positivos     → Sanity check básico
+Thresholds diferenciados por mercado:
+
+              Crypto          Stocks
+Drift:       < 0.5%          < 0.2%    (stocks se mueven menos)
+Spread:      < 0.3%          < 0.1%    (stocks tienen spreads más tight)
+Volume 24h:  > $100K         > $1M     (stocks necesitan más liquidez)
+Precios:     > 0             > 0       (sanity check)
 ```
 
 Si falla cualquiera → GUARD_REJECTED, el trade no se ejecuta.
@@ -834,9 +885,10 @@ ws://localhost:8000/ws?channels=portfolio,positions,signals,risk,system&token=AP
 #### Dashboard
 - Balance total, disponible, asignado
 - PnL del día y total
-- Posiciones abiertas con PnL en tiempo real
-- Señales recientes
-- Estado del sistema
+- Posiciones abiertas con PnL en tiempo real (badges CRY/STK por asset class)
+- Señales recientes (badges CRY/STK)
+- Estado del sistema + indicador de mercado USA (Open/Closed)
+- Trades recientes (badges CRY/STK)
 
 #### Strategies
 - Lista de estrategias (nombre, tipo, símbolos)
@@ -844,9 +896,11 @@ ws://localhost:8000/ws?channels=portfolio,positions,signals,risk,system&token=AP
 - Editar parámetros (RSI period, SMA fast/slow, etc.)
 
 #### Trades
-- Historial de trades cerrados
+- Historial de trades cerrados (badges CRY/STK)
+- Órdenes con badges de asset class
 - PnL por trade
 - Win rate, average win/loss
+- Filtro por `asset_class` en la API (`?asset_class=STOCKS`)
 
 #### Risk Panel
 - Estado del circuit breaker
@@ -898,6 +952,7 @@ CHECK (filled_qty IS NULL OR filled_qty <= requested_qty)
 | 004 | fix_balance | Corrige balance >= 0 (no -1) |
 | 005 | execution_mode | Agrega execution_mode y oco_order_id a positions |
 | 006 | constraints_indexes | Constraints de seguridad + indexes de performance |
+| 007 | add_asset_class | Agrega columna `asset_class` (CRYPTO/STOCKS) a signals, orders, positions, trades |
 
 ---
 
@@ -938,6 +993,17 @@ GUARD_MAX_PRICE_DRIFT_PCT=0.005      # Máximo 0.5% drift de precio
 GUARD_MAX_SPREAD_PCT=0.003           # Máximo 0.3% spread
 GUARD_MIN_VOLUME_24H=100000.0        # Mínimo $100K volumen 24h
 
+# === ALPACA (Acciones USA) ===
+ALPACA_ENABLED=true                  # Activa el módulo de acciones
+ALPACA_API_KEY=PKxxxxxxxx           # API key de Alpaca (paper trading)
+ALPACA_API_SECRET=xxxxxxxx          # API secret de Alpaca
+STOCK_SYMBOLS=AAPL,MSFT,GOOGL,AMZN,NVDA,TSLA,META,JPM,V,SPY
+
+# === GUARD STOCKS ===
+GUARD_STOCK_MAX_PRICE_DRIFT_PCT=0.002  # 0.2% (más tight que crypto)
+GUARD_STOCK_MAX_SPREAD_PCT=0.001       # 0.1%
+GUARD_STOCK_MIN_VOLUME_24H=1000000.0   # $1M mínimo
+
 # === NOTIFICACIONES ===
 TELEGRAM_BOT_TOKEN=                  # Token de tu bot de Telegram
 TELEGRAM_CHAT_ID=                    # ID del chat donde enviar alertas
@@ -972,7 +1038,7 @@ PYTHONPATH=. alembic upgrade head
 PYTHONPATH=. python -m scripts.seed_paper_portfolio
 
 # Arrancar API
-PYTHONPATH=. uvicorn app.main:app --host 0.0.0.0 --port 8000
+PYTHONPATH=. uvicorn app.main:app --host 0.0.0.0 --port 8001
 
 # Arrancar paper trading (background tasks)
 PYTHONPATH=. python -m scripts.start_paper_trading
@@ -980,8 +1046,13 @@ PYTHONPATH=. python -m scripts.start_paper_trading
 # Correr tests
 PYTHONPATH=. pytest tests/ -v
 
-# Entrenar modelo ML
+# Entrenar modelo ML (crypto)
 PYTHONPATH=. python -m scripts.train_model
+
+# Entrenar modelo ML (stocks)
+PYTHONPATH=. python -m scripts.train_stock_model
+PYTHONPATH=. python -m scripts.train_stock_model --symbols AAPL MSFT NVDA
+PYTHONPATH=. python -m scripts.train_stock_model --download-only
 
 # Descargar datos históricos
 PYTHONPATH=. python -m scripts.download_historical
@@ -1017,4 +1088,10 @@ PYTHONPATH=. python -m scripts.download_historical
 | **Feature** | Variable/indicador que el ML usa para predecir |
 | **Label** | Lo que el ML intenta predecir (buena compra = 1, mala = 0) |
 | **Backtest** | Simular una estrategia sobre datos históricos |
+| **Asset Class** | Tipo de activo: CRYPTO (criptomonedas) o STOCKS (acciones USA) |
+| **Alpaca** | Broker/API gratuito para trading de acciones USA (paper + live) |
+| **Market Hours** | Horario del mercado USA: Lun-Vie 9:30-16:00 ET |
+| **Trading Day** | Día en que el mercado está abierto (excluye fines de semana y festivos USA) |
+| **S&P 500** | Índice de las 500 empresas más grandes de USA (SPY es su ETF) |
+| **NASDAQ** | Bolsa de empresas tecnológicas (AAPL, MSFT, GOOGL, etc.) |
 | **Shadow Mode** | ML genera señales pero no se ejecutan (solo monitoreo) |
