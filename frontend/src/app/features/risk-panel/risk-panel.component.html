@@ -57,6 +57,39 @@
     </div>
   </div>
 
+  <!-- Alpaca / US Market Status -->
+  <div class="section" *ngIf="health?.alpaca?.enabled">
+    <h3>US Stock Market</h3>
+    <div class="risk-grid">
+      <div class="card">
+        <div class="card-header">Market Status</div>
+        <div class="card-value" [class.positive]="health.alpaca?.market_open"
+             [class.negative]="!health.alpaca?.market_open">
+          {{ health.alpaca?.market_open ? 'OPEN' : 'CLOSED' }}
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header">Alpaca WebSocket</div>
+        <div class="card-value" [class.positive]="health.alpaca?.ws_connected"
+             [class.negative]="!health.alpaca?.ws_connected">
+          {{ health.alpaca?.ws_connected ? 'CONNECTED' : 'DISCONNECTED' }}
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header">Stock Symbols</div>
+        <div class="card-value" style="font-size: 14px;">
+          {{ health.alpaca?.stock_symbols?.length || 0 }} active
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header">Guard (Stocks)</div>
+        <div class="card-value" style="font-size: 12px;">
+          Drift 0.2% / Spread 0.1% / Vol $1M
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Health Checks -->
   <div class="section" *ngIf="health">
     <h3>Health Checks</h3>

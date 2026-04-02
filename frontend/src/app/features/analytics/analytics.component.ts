@@ -1,11 +1,12 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../core/services/api.service';
 
 @Component({
   selector: 'app-analytics',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule],
   templateUrl: './analytics.component.html',
   styleUrl: './analytics.component.scss',
 })
@@ -16,10 +17,15 @@ export class AnalyticsComponent implements OnInit {
   strategyPerf: any[] = [];
   paperVsLive: any = null;
   mlShadow: any = null;
+  assetClassFilter: string = '';
 
   constructor(private api: ApiService) {}
 
   ngOnInit(): void {
+    this.loadData();
+  }
+
+  onFilterChange(): void {
     this.loadData();
   }
 

@@ -14,6 +14,7 @@ interface Strategy {
   is_active: boolean;
   version: number;
   created_at: string;
+  asset_class?: string;
 }
 
 @Component({
@@ -32,6 +33,7 @@ export class StrategiesComponent implements OnInit {
     name: '',
     description: '',
     strategy_type: 'momentum',
+    asset_class: 'CRYPTO',
     parameters: '{}',
     symbols: 'BTCUSDT,ETHUSDT',
     timeframe: '1h',
@@ -72,11 +74,24 @@ export class StrategiesComponent implements OnInit {
     });
   }
 
+  onAssetClassChange(): void {
+    if (this.newStrategy.asset_class === 'STOCKS') {
+      this.newStrategy.symbols = 'AAPL,MSFT,GOOGL,NVDA';
+      this.newStrategy.timeframe = '1d';
+      this.newStrategy.strategy_type = 'stock_momentum';
+    } else {
+      this.newStrategy.symbols = 'BTCUSDT,ETHUSDT';
+      this.newStrategy.timeframe = '1h';
+      this.newStrategy.strategy_type = 'momentum';
+    }
+  }
+
   resetForm(): void {
     this.newStrategy = {
       name: '',
       description: '',
       strategy_type: 'momentum',
+      asset_class: 'CRYPTO',
       parameters: '{}',
       symbols: 'BTCUSDT,ETHUSDT',
       timeframe: '1h',

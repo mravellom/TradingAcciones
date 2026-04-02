@@ -1,8 +1,25 @@
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+
+  h2 { margin: 0; }
+}
+
+.asset-filter {
+  padding: 6px 12px;
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  color: #e0e0e0;
+  font-size: 13px;
+}
+
 .analytics {
   padding: 0;
 
   h2 {
-    margin: 0 0 20px;
     color: #e0e0e0;
     font-size: 22px;
   }

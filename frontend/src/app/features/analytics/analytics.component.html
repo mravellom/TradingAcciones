@@ -1,5 +1,12 @@
 <div class="analytics">
-  <h2>Analytics Dashboard</h2>
+  <div class="page-header">
+    <h2>Analytics Dashboard</h2>
+    <select class="asset-filter" [(ngModel)]="assetClassFilter" (change)="onFilterChange()">
+      <option value="">All Markets</option>
+      <option value="CRYPTO">Crypto</option>
+      <option value="STOCKS">Stocks USA</option>
+    </select>
+  </div>
 
   <!-- Summary Cards -->
   <div class="cards-grid" *ngIf="summary">

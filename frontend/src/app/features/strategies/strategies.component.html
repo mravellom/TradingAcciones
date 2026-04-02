@@ -15,16 +15,25 @@
         <input [(ngModel)]="newStrategy.name" placeholder="my_strategy" />
       </div>
       <div class="form-group">
+        <label>Asset Class</label>
+        <select [(ngModel)]="newStrategy.asset_class" (change)="onAssetClassChange()">
+          <option value="CRYPTO">Crypto (Binance)</option>
+          <option value="STOCKS">Stocks USA (Alpaca)</option>
+        </select>
+      </div>
+      <div class="form-group">
         <label>Type</label>
         <select [(ngModel)]="newStrategy.strategy_type">
           <option value="momentum">Momentum</option>
+          <option value="stock_momentum" *ngIf="newStrategy.asset_class === 'STOCKS'">Stock Momentum</option>
           <option value="mean_reversion">Mean Reversion</option>
           <option value="breakout">Breakout</option>
         </select>
       </div>
       <div class="form-group">
         <label>Symbols (comma separated)</label>
-        <input [(ngModel)]="newStrategy.symbols" placeholder="BTCUSDT,ETHUSDT" />
+        <input [(ngModel)]="newStrategy.symbols"
+               [placeholder]="newStrategy.asset_class === 'STOCKS' ? 'AAPL,MSFT,GOOGL' : 'BTCUSDT,ETHUSDT'" />
       </div>
       <div class="form-group">
         <label>Timeframe</label>
@@ -56,6 +65,9 @@
       <div class="strategy-header">
         <div>
           <h3>{{ s.name }}</h3>
+          <span class="badge badge-asset" [class.badge-stocks]="s.asset_class === 'STOCKS'">
+            {{ s.asset_class === 'STOCKS' ? 'STK' : 'CRY' }}
+          </span>
           <span class="type-badge">{{ s.strategy_type }}</span>
           <span class="version">v{{ s.version }}</span>
         </div>

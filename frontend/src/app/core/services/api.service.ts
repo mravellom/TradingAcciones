@@ -41,10 +41,10 @@ export class ApiService {
   }
 
   // Signals
-  getSignals(limit: number = 50): Observable<Signal[]> {
-    return this.http.get<Signal[]>(`${BASE_URL}/signals`, {
-      params: { limit },
-    });
+  getSignals(limit: number = 50, assetClass?: string): Observable<Signal[]> {
+    const params: any = { limit };
+    if (assetClass) params.asset_class = assetClass;
+    return this.http.get<Signal[]>(`${BASE_URL}/signals`, { params });
   }
 
   getActiveSignals(): Observable<Signal[]> {
@@ -52,10 +52,10 @@ export class ApiService {
   }
 
   // Orders
-  getOrders(limit: number = 50): Observable<Order[]> {
-    return this.http.get<Order[]>(`${BASE_URL}/orders`, {
-      params: { limit },
-    });
+  getOrders(limit: number = 50, assetClass?: string): Observable<Order[]> {
+    const params: any = { limit };
+    if (assetClass) params.asset_class = assetClass;
+    return this.http.get<Order[]>(`${BASE_URL}/orders`, { params });
   }
 
   getActiveOrders(): Observable<Order[]> {
@@ -67,17 +67,17 @@ export class ApiService {
     return this.http.get<Position[]>(`${BASE_URL}/positions/open`);
   }
 
-  getPositions(limit: number = 50): Observable<Position[]> {
-    return this.http.get<Position[]>(`${BASE_URL}/positions`, {
-      params: { limit },
-    });
+  getPositions(limit: number = 50, assetClass?: string): Observable<Position[]> {
+    const params: any = { limit };
+    if (assetClass) params.asset_class = assetClass;
+    return this.http.get<Position[]>(`${BASE_URL}/positions`, { params });
   }
 
   // Trades
-  getTrades(limit: number = 50): Observable<Trade[]> {
-    return this.http.get<Trade[]>(`${BASE_URL}/trades`, {
-      params: { limit },
-    });
+  getTrades(limit: number = 50, assetClass?: string): Observable<Trade[]> {
+    const params: any = { limit };
+    if (assetClass) params.asset_class = assetClass;
+    return this.http.get<Trade[]>(`${BASE_URL}/trades`, { params });
   }
 
   getWinRate(): Observable<{ win_rate: number }> {
