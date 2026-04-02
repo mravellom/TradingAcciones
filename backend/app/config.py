@@ -32,7 +32,7 @@ class Settings(BaseSettings):
         return v
 
     # Rate limiting
-    rate_limit_requests: int = 60  # requests per window
+    rate_limit_requests: int = 200  # requests per window (dashboard polls 10 endpoints every 5s)
     rate_limit_window_seconds: int = 60  # window size
 
     # Database
