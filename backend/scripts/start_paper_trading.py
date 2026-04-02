@@ -83,15 +83,18 @@ async def start_background_tasks():
     async with async_session_factory() as session:
         stmt = select(StrategyConfig).where(StrategyConfig.is_active == True)
         result = await session.execute(stmt)
-        strategy = result.scalar_one_or_none()
+        active_strategies = list(result.scalars().all())
 
-    if strategy is None:
+    if not active_strategies:
         logger.error("no_active_strategy")
         return
 
+    # Use first crypto strategy as primary
+    strategy = active_strategies[0]
     strategy_id = strategy.id
     symbols = strategy.symbols or ["BTCUSDT", "ETHUSDT"]
-    logger.info("active_strategy", name=strategy.name, symbols=symbols, id=str(strategy_id))
+    for s in active_strategies:
+        logger.info("active_strategy", name=s.name, asset_class=s.asset_class, symbols=s.symbols)
 
     tasks = []
 
