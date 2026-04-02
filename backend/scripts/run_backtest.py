@@ -10,6 +10,8 @@ Usage:
     python -m scripts.run_backtest
     python -m scripts.run_backtest --symbol ETHUSDT
     python -m scripts.run_backtest --symbol BTCUSDT --tp 0.015 --sl 0.01
+    python -m scripts.run_backtest --stocks --symbol AAPL
+    python -m scripts.run_backtest --stocks --symbol SPY --tp 0.015 --sl 0.0075
 """
 import argparse
 
@@ -18,7 +20,10 @@ import pandas as pd
 from xgboost import XGBClassifier
 
 from app.ml.backtesting.engine import BacktestConfig
-from app.ml.config import LabelConfig, FeatureConfig, XGBoostConfig, SYMBOLS
+from app.ml.config import (
+    LabelConfig, FeatureConfig, XGBoostConfig, SYMBOLS,
+    StockLabelConfig, STOCK_SYMBOLS, STOCK_PRIMARY_TIMEFRAME,
+)
 from app.ml.data.labeler import triple_barrier_label, label_stats
 from app.ml.features.pipeline import compute_features, get_feature_names
 from app.ml.training.evaluator import evaluate_predictions, TradingMetrics
@@ -31,9 +36,11 @@ from app.ml.training.optimizer import (
 from app.ml.training.splitter import walk_forward_splits
 
 
-def main(symbol: str, tp: float, sl: float, horizon: int):
-    print(f"Loading {symbol} 1h data...")
-    df = pd.read_parquet(f"ml_data/raw/{symbol}_1h.parquet")
+def main(symbol: str, tp: float, sl: float, horizon: int, is_stocks: bool = False):
+    timeframe = STOCK_PRIMARY_TIMEFRAME if is_stocks else "1h"
+    asset_type = "STOCKS" if is_stocks else "CRYPTO"
+    print(f"Loading {symbol} {timeframe} data ({asset_type})...")
+    df = pd.read_parquet(f"ml_data/raw/{symbol}_{timeframe}.parquet")
     print(f"  {len(df)} rows: {df.index[0]} to {df.index[-1]}")
 
     label_cfg = LabelConfig(tp_pct=tp, sl_pct=sl, horizon_bars=horizon)
@@ -211,10 +218,23 @@ def main(symbol: str, tp: float, sl: float, horizon: int):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--symbol", default="BTCUSDT")
-    parser.add_argument("--tp", type=float, default=0.015)
-    parser.add_argument("--sl", type=float, default=0.01)
-    parser.add_argument("--horizon", type=int, default=24)
+    parser.add_argument("--symbol", default=None)
+    parser.add_argument("--tp", type=float, default=None)
+    parser.add_argument("--sl", type=float, default=None)
+    parser.add_argument("--horizon", type=int, default=None)
+    parser.add_argument("--stocks", action="store_true", help="Backtest with stock parameters")
     args = parser.parse_args()
 
-    main(args.symbol, args.tp, args.sl, args.horizon)
+    if args.stocks:
+        stock_cfg = StockLabelConfig()
+        symbol = args.symbol or "SPY"
+        tp = args.tp or stock_cfg.tp_pct
+        sl = args.sl or stock_cfg.sl_pct
+        horizon = args.horizon or stock_cfg.horizon_bars
+    else:
+        symbol = args.symbol or "BTCUSDT"
+        tp = args.tp or 0.015
+        sl = args.sl or 0.01
+        horizon = args.horizon or 24
+
+    main(symbol, tp, sl, horizon, is_stocks=args.stocks)

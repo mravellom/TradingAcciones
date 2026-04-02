@@ -1,6 +1,6 @@
 """Tests for AlpacaExecutor."""
 from decimal import Decimal
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
@@ -48,18 +48,19 @@ class TestAlpacaExecutor:
         assert result is True
 
     @pytest.mark.asyncio
-    async def test_live_submit_not_implemented(self):
+    @patch("app.pipeline.execution.alpaca_executor.is_us_market_open", return_value=True)
+    async def test_live_submit_requires_connection(self, mock_mh):
         executor = AlpacaExecutor(paper_mode=False)
-        with pytest.raises(NotImplementedError):
+        with pytest.raises(RuntimeError, match="not connected"):
             await executor.submit(
                 uuid4(), "AAPL", OrderSide.BUY, Decimal("10"), Decimal("150")
             )
 
     @pytest.mark.asyncio
-    async def test_live_cancel_not_implemented(self):
+    async def test_live_cancel_without_client_returns_false(self):
         executor = AlpacaExecutor(paper_mode=False)
-        with pytest.raises(NotImplementedError):
-            await executor.cancel(uuid4())
+        result = await executor.cancel(uuid4(), "some-id")
+        assert result is False
 
     def test_paper_engine_has_stock_slippage(self):
         executor = AlpacaExecutor(paper_mode=True)
