@@ -157,8 +157,12 @@ async def start_background_tasks():
     # 4. ML Shadow Scanner (if models exist)
     if exchange:
         from app.tasks.ml_shadow_scanner import MLShadowScanner
+        # Include stock symbols if Alpaca is enabled
+        shadow_symbols = list(symbols)
+        if alpaca_exchange and settings.alpaca_enabled:
+            shadow_symbols.extend(settings.stock_symbols)
         shadow = MLShadowScanner(
-            symbols=symbols,
+            symbols=shadow_symbols,
             exchange=exchange,
             session_factory=async_session_factory,
             strategy_id=str(strategy_id),

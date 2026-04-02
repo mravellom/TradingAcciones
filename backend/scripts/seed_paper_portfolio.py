@@ -68,6 +68,7 @@ async def seed():
                     name="stock_momentum_us",
                     description="Stock momentum strategy (RSI 35/65 + SMA 10/30) for US equities",
                     strategy_type="stock_momentum",
+                    asset_class="STOCKS",
                     parameters={
                         "rsi_period": 14,
                         "rsi_oversold": 35,

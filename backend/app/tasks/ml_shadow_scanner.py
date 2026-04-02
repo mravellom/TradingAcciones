@@ -15,9 +15,10 @@ from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.core.events import EventPublisher
 from app.core.logging import get_logger
-from app.domain.enums import AggregateType, EventType
+from app.domain.enums import AggregateType, AssetClass, EventType
 from app.exchange.base import ExchangeClient, Kline
 from app.ml.serving.ml_signal_generator import MLSignalGenerator
 from app.models.signal import Signal as SignalModel
@@ -111,8 +112,14 @@ class MLShadowScanner:
 
         # Save shadow signal to DB
         async with self._session_factory() as session:
+            asset_class = (
+                AssetClass.STOCKS.value
+                if symbol in settings.stock_symbols
+                else AssetClass.CRYPTO.value
+            )
             db_signal = SignalModel(
                 symbol=symbol,
+                asset_class=asset_class,
                 signal_type=signal.signal_type.value,
                 confidence=signal.confidence,
                 timeframe="1h",

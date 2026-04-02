@@ -32,12 +32,23 @@ from app.repositories.portfolio_repo import PortfolioRepository
 
 # Simulation parameters
 SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT"]
+STOCK_SYMBOLS = ["AAPL", "MSFT", "GOOGL", "NVDA", "TSLA", "SPY"]
+ALL_SYMBOLS = SYMBOLS + STOCK_SYMBOLS
 BASE_PRICES = {
     "BTCUSDT": 67500,
     "ETHUSDT": 3450,
     "SOLUSDT": 185,
     "BNBUSDT": 610,
+    "AAPL": 241,
+    "MSFT": 420,
+    "GOOGL": 175,
+    "NVDA": 130,
+    "TSLA": 265,
+    "SPY": 575,
 }
+
+def _asset_class(symbol: str) -> str:
+    return "STOCKS" if symbol in STOCK_SYMBOLS else "CRYPTO"
 NUM_CLOSED_TRADES = 25
 NUM_OPEN_POSITIONS = 3
 NUM_REJECTED_SIGNALS = 5
@@ -83,7 +94,7 @@ async def simulate():
 
         # ── 1. Closed Trades (over the last 14 days) ──
         for i in range(NUM_CLOSED_TRADES):
-            symbol = random.choice(SYMBOLS)
+            symbol = random.choice(ALL_SYMBOLS)
             base = BASE_PRICES[symbol]
             confidence = random_confidence()
             entry_price = random_price(base, 0.03)
@@ -117,11 +128,13 @@ async def simulate():
             tp = entry_price * Decimal("1.04")
 
             # Create signal
+            ac = _asset_class(symbol)
             signal = Signal(
                 symbol=symbol,
+                asset_class=ac,
                 signal_type="BUY",
                 confidence=confidence,
-                timeframe="1h",
+                timeframe="1d" if ac == "STOCKS" else "1h",
                 indicators={
                     "rsi": round(random.uniform(20, 45), 1),
                     "sma_fast": float(entry_price * Decimal("0.99")),
@@ -142,6 +155,7 @@ async def simulate():
             order = Order(
                 signal_id=signal.id,
                 symbol=symbol,
+                asset_class=ac,
                 side="BUY",
                 order_type="MARKET",
                 status=OrderStatus.FILLED.value,
@@ -171,9 +185,12 @@ async def simulate():
 
             position = Position(
                 symbol=symbol,
+                asset_class=ac,
                 side="LONG",
                 status=pos_status,
                 entry_order_id=order.id,
+                strategy_id=strategy_id,
+                signal_confidence=confidence,
                 entry_price=entry_price,
                 current_price=exit_price,
                 quantity=quantity,
@@ -181,6 +198,7 @@ async def simulate():
                 take_profit=tp,
                 unrealized_pnl=Decimal("0"),
                 realized_pnl=pnl,
+                execution_mode=ExecutionMode.PAPER.value,
                 opened_at=opened_at,
                 closed_at=closed_at,
             )
@@ -191,6 +209,7 @@ async def simulate():
             trade = Trade(
                 position_id=position.id,
                 symbol=symbol,
+                asset_class=ac,
                 entry_price=entry_price,
                 exit_price=exit_price,
                 quantity=quantity,
@@ -230,7 +249,7 @@ async def simulate():
         allocated = Decimal("0")
 
         for i in range(NUM_OPEN_POSITIONS):
-            symbol = SYMBOLS[i % len(SYMBOLS)]
+            symbol = ALL_SYMBOLS[i % len(ALL_SYMBOLS)]
             base = BASE_PRICES[symbol]
             entry_price = random_price(base, 0.02)
             current_price = random_price(base, 0.03)
@@ -245,11 +264,13 @@ async def simulate():
 
             opened_at = now - timedelta(hours=random.uniform(1, 48))
 
+            ac = _asset_class(symbol)
             signal = Signal(
                 symbol=symbol,
+                asset_class=ac,
                 signal_type="BUY",
                 confidence=confidence,
-                timeframe="1h",
+                timeframe="1d" if ac == "STOCKS" else "1h",
                 indicators={"rsi": round(random.uniform(25, 40), 1)},
                 entry_price=entry_price,
                 stop_loss=sl,
@@ -265,6 +286,7 @@ async def simulate():
             order = Order(
                 signal_id=signal.id,
                 symbol=symbol,
+                asset_class=ac,
                 side="BUY",
                 order_type="MARKET",
                 status=OrderStatus.FILLED.value,
@@ -286,9 +308,12 @@ async def simulate():
 
             position = Position(
                 symbol=symbol,
+                asset_class=ac,
                 side="LONG",
                 status=PositionStatus.OPEN.value,
                 entry_order_id=order.id,
+                strategy_id=strategy_id,
+                signal_confidence=confidence,
                 entry_price=entry_price,
                 current_price=current_price,
                 quantity=quantity,
@@ -296,6 +321,7 @@ async def simulate():
                 take_profit=tp,
                 unrealized_pnl=unrealized,
                 realized_pnl=Decimal("0"),
+                execution_mode=ExecutionMode.PAPER.value,
                 opened_at=opened_at,
             )
             session.add(position)
@@ -309,16 +335,18 @@ async def simulate():
         print()
         print(f"Creating {NUM_REJECTED_SIGNALS} rejected signals...")
         for i in range(NUM_REJECTED_SIGNALS):
-            symbol = random.choice(SYMBOLS)
+            symbol = random.choice(ALL_SYMBOLS)
             base = BASE_PRICES[symbol]
             entry_price = random_price(base, 0.02)
             created_at = now - timedelta(hours=random.uniform(0.5, 72))
+            ac = _asset_class(symbol)
 
             signal = Signal(
                 symbol=symbol,
+                asset_class=ac,
                 signal_type="BUY",
                 confidence=Decimal(str(round(random.uniform(0.45, 0.59), 4))),
-                timeframe="1h",
+                timeframe="1d" if ac == "STOCKS" else "1h",
                 indicators={"rsi": round(random.uniform(35, 50), 1)},
                 entry_price=entry_price,
                 stop_loss=entry_price * Decimal("0.97"),

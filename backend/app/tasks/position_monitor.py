@@ -1,11 +1,16 @@
 import asyncio
 import time
+from datetime import datetime, time as dt_time
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 
 from app.core.logging import get_logger
 from app.core.redis import get_redis
 from app.domain.enums import AssetClass, ExecutionMode, PositionStatus
 from app.exchange.market_hours import is_us_market_open
+
+ET = ZoneInfo("America/New_York")
+MARKET_CLOSE_WARNING = dt_time(15, 55)  # 3:55 PM ET — 5 min before close
 from app.pipeline.position_manager.position_manager import PositionManager
 from app.repositories.position_repo import PositionRepository
 from app.services.portfolio_service import PortfolioService
@@ -65,12 +70,29 @@ class PositionMonitor:
             open_positions = await repo.get_open_for_update()
 
             for position in open_positions:
-                # Skip stock positions outside US market hours
-                if (
-                    getattr(position, "asset_class", "CRYPTO") == AssetClass.STOCKS.value
-                    and not is_us_market_open()
-                ):
-                    continue
+                is_stock = getattr(position, "asset_class", "CRYPTO") == AssetClass.STOCKS.value
+
+                if is_stock:
+                    # Auto-close stock positions near market close (3:55 PM ET)
+                    now_et = datetime.now(ET)
+                    if now_et.time() >= MARKET_CLOSE_WARNING and is_us_market_open():
+                        current_price = await self._get_price(position.symbol)
+                        if current_price:
+                            logger.warning(
+                                "market_close_auto_close",
+                                position_id=str(position.id),
+                                symbol=position.symbol,
+                                price=str(current_price),
+                            )
+                            await self._close_triggered(
+                                session, pos_mgr, portfolio_svc, position,
+                                current_price, "MARKET_CLOSE",
+                            )
+                        continue
+
+                    # Skip stock positions outside US market hours
+                    if not is_us_market_open():
+                        continue
 
                 current_price = await self._get_price(position.symbol)
                 if current_price is None:
