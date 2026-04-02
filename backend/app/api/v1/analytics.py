@@ -9,37 +9,45 @@ router = APIRouter(prefix="/analytics", tags=["analytics"])
 
 
 @router.get("/summary")
-async def get_summary(db: AsyncSession = Depends(get_db_session)):
-    """Get trading performance summary: win rate, PnL, Sharpe ratio, max drawdown."""
+async def get_summary(
+    asset_class: str | None = Query(None, pattern="^(CRYPTO|STOCKS)$"),
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Get trading performance summary. Filter by asset_class (CRYPTO|STOCKS)."""
     svc = AnalyticsService(db)
-    return await svc.get_summary()
+    return await svc.get_summary(asset_class)
 
 
 @router.get("/pnl")
 async def get_cumulative_pnl(
     days: int = Query(default=30, ge=1, le=365),
+    asset_class: str | None = Query(None, pattern="^(CRYPTO|STOCKS)$"),
     db: AsyncSession = Depends(get_db_session),
 ):
-    """Get daily cumulative PnL over the specified number of days."""
+    """Get daily cumulative PnL. Filter by asset_class (CRYPTO|STOCKS)."""
     svc = AnalyticsService(db)
-    return await svc.get_cumulative_pnl(days)
+    return await svc.get_cumulative_pnl(days, asset_class)
 
 
 @router.get("/drawdown")
 async def get_drawdown(
     days: int = Query(default=30, ge=1, le=365),
+    asset_class: str | None = Query(None, pattern="^(CRYPTO|STOCKS)$"),
     db: AsyncSession = Depends(get_db_session),
 ):
-    """Get drawdown series over the specified number of days."""
+    """Get drawdown series. Filter by asset_class (CRYPTO|STOCKS)."""
     svc = AnalyticsService(db)
-    return await svc.get_drawdown_series(days)
+    return await svc.get_drawdown_series(days, asset_class)
 
 
 @router.get("/per-strategy")
-async def get_per_strategy(db: AsyncSession = Depends(get_db_session)):
-    """Get performance breakdown per trading strategy."""
+async def get_per_strategy(
+    asset_class: str | None = Query(None, pattern="^(CRYPTO|STOCKS)$"),
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Get performance per strategy. Filter by asset_class (CRYPTO|STOCKS)."""
     svc = AnalyticsService(db)
-    return await svc.get_per_strategy_performance()
+    return await svc.get_per_strategy_performance(asset_class)
 
 
 @router.get("/paper-vs-live")

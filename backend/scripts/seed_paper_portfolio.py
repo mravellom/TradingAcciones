@@ -59,6 +59,33 @@ async def seed():
         else:
             print("Strategy 'momentum_btc_eth' already exists")
 
+        # Create stock momentum strategy config (if Alpaca enabled)
+        if settings.alpaca_enabled:
+            stmt = select(StrategyConfig).where(StrategyConfig.name == "stock_momentum_us")
+            result = await session.execute(stmt)
+            if result.scalar_one_or_none() is None:
+                stock_strategy = StrategyConfig(
+                    name="stock_momentum_us",
+                    description="Stock momentum strategy (RSI 35/65 + SMA 10/30) for US equities",
+                    strategy_type="stock_momentum",
+                    parameters={
+                        "rsi_period": 14,
+                        "rsi_oversold": 35,
+                        "rsi_overbought": 65,
+                        "sma_fast": 10,
+                        "sma_slow": 30,
+                        "rsi_weight": 0.5,
+                        "sma_weight": 0.5,
+                    },
+                    symbols=settings.stock_symbols,
+                    timeframe="1d",
+                    is_active=True,
+                )
+                session.add(stock_strategy)
+                print(f"Strategy 'stock_momentum_us' created (ID: {stock_strategy.id})")
+            else:
+                print("Strategy 'stock_momentum_us' already exists")
+
         await session.commit()
         print("Seed complete.")
 

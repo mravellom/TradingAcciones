@@ -26,6 +26,7 @@ from app.domain.enums import (
     RiskAction,
     SignalType,
 )
+from app.exchange.market_hours import is_us_market_open
 from app.models.order import Order
 from app.models.portfolio import Portfolio
 from app.models.signal import Signal as SignalModel
@@ -128,6 +129,13 @@ class TradingPipeline:
         sl_tp_error = _validate_sl_tp(intent)
         if sl_tp_error:
             return PipelineResult(action="REJECTED", reason=f"Invalid SL/TP: {sl_tp_error}")
+
+        # 0b. Reject stock orders outside market hours
+        if intent.symbol in settings.stock_symbols and not is_us_market_open():
+            return PipelineResult(
+                action="REJECTED",
+                reason="US stock market is closed. Orders only accepted Mon-Fri 9:30-16:00 ET.",
+            )
 
         # 1. Check system status
         system_status = await self._redis.get("system:status") or "RUNNING"

@@ -17,7 +17,7 @@ class AnalyticsService:
     def __init__(self, session: AsyncSession):
         self._session = session
 
-    async def get_cumulative_pnl(self, days: int = 30) -> list[dict]:
+    async def get_cumulative_pnl(self, days: int = 30, asset_class: str | None = None) -> list[dict]:
         """Get daily cumulative PnL for the last N days."""
         since = datetime.now(timezone.utc) - timedelta(days=days)
         stmt = (
@@ -29,6 +29,8 @@ class AnalyticsService:
             .group_by(func.date(Trade.closed_at))
             .order_by(func.date(Trade.closed_at))
         )
+        if asset_class:
+            stmt = stmt.where(Trade.asset_class == asset_class)
         result = await self._session.execute(stmt)
         rows = result.all()
 
@@ -43,7 +45,7 @@ class AnalyticsService:
             })
         return data
 
-    async def get_per_strategy_performance(self) -> list[dict]:
+    async def get_per_strategy_performance(self, asset_class: str | None = None) -> list[dict]:
         """Get performance breakdown per strategy."""
         stmt = select(
             Trade.strategy_id,
@@ -56,7 +58,10 @@ class AnalyticsService:
             func.max(Trade.pnl).label("best_trade"),
             func.min(Trade.pnl).label("worst_trade"),
             func.avg(Trade.duration_seconds).label("avg_duration"),
-        ).group_by(Trade.strategy_id)
+        )
+        if asset_class:
+            stmt = stmt.where(Trade.asset_class == asset_class)
+        stmt = stmt.group_by(Trade.strategy_id)
 
         result = await self._session.execute(stmt)
         rows = result.all()
@@ -82,7 +87,7 @@ class AnalyticsService:
             })
         return data
 
-    async def get_drawdown_series(self, days: int = 30) -> list[dict]:
+    async def get_drawdown_series(self, days: int = 30, asset_class: str | None = None) -> list[dict]:
         """Get drawdown over time."""
         since = datetime.now(timezone.utc) - timedelta(days=days)
         stmt = (
@@ -94,6 +99,8 @@ class AnalyticsService:
             .group_by(func.date(Trade.closed_at))
             .order_by(func.date(Trade.closed_at))
         )
+        if asset_class:
+            stmt = stmt.where(Trade.asset_class == asset_class)
         result = await self._session.execute(stmt)
         rows = result.all()
 
@@ -115,7 +122,7 @@ class AnalyticsService:
             })
         return data
 
-    async def get_summary(self) -> dict:
+    async def get_summary(self, asset_class: str | None = None) -> dict:
         """Get overall trading summary."""
         stmt = select(
             func.count(Trade.id).label("total_trades"),
@@ -125,6 +132,8 @@ class AnalyticsService:
             func.avg(Trade.duration_seconds).label("avg_duration"),
             func.avg(Trade.pnl_percent).label("avg_return"),
         )
+        if asset_class:
+            stmt = stmt.where(Trade.asset_class == asset_class)
         result = await self._session.execute(stmt)
         row = result.one()
 

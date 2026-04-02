@@ -44,6 +44,8 @@ class SignalScanner:
         self._session_factory = session_factory
         self._scan_interval = scan_interval
         self._running = False
+        self._stock_scan_interval = settings.stock_scan_interval
+        self._cycles_since_stock_scan = self._stock_scan_interval  # Scan immediately on first cycle
 
     async def start(self) -> None:
         """Start the periodic scan loop."""
@@ -74,9 +76,16 @@ class SignalScanner:
             strategy_symbols[strategy.id] = s_symbols
             symbols.update(s_symbols)
 
-        # Add stock symbols if Alpaca is enabled and market is open
-        if settings.alpaca_enabled and is_us_market_open():
+        # Add stock symbols on a slower cadence (stock_scan_interval)
+        self._cycles_since_stock_scan += self._scan_interval
+        scan_stocks = (
+            settings.alpaca_enabled
+            and is_us_market_open()
+            and self._cycles_since_stock_scan >= self._stock_scan_interval
+        )
+        if scan_stocks:
             symbols.update(settings.stock_symbols)
+            self._cycles_since_stock_scan = 0
 
         for symbol in symbols:
             await self._scan_symbol(symbol)

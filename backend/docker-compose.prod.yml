@@ -10,6 +10,8 @@ services:
       - api_key
       - binance_api_key
       - binance_api_secret
+      - alpaca_api_key
+      - alpaca_api_secret
       - telegram_bot_token
 
 secrets:
@@ -21,5 +23,9 @@ secrets:
     file: ./secrets/binance_api_key.txt
   binance_api_secret:
     file: ./secrets/binance_api_secret.txt
+  alpaca_api_key:
+    file: ./secrets/alpaca_api_key.txt
+  alpaca_api_secret:
+    file: ./secrets/alpaca_api_secret.txt
   telegram_bot_token:
     file: ./secrets/telegram_bot_token.txt
