@@ -166,6 +166,7 @@ class SignalScanner:
             logger.info(
                 "signal_generated",
                 symbol=intent.symbol,
+                asset_class=asset_class,
                 type=intent.action.value,
                 confidence=str(intent.confidence),
                 strategy_id=str(intent.strategy_id),

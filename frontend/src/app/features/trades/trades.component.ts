@@ -1,12 +1,13 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../core/services/api.service';
 import { Trade, Order } from '../../shared/models/trading.models';
 
 @Component({
   selector: 'app-trades',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule],
   templateUrl: './trades.component.html',
   styleUrl: './trades.component.scss',
 })
@@ -15,21 +16,23 @@ export class TradesComponent implements OnInit {
   orders: Order[] = [];
   activeTab: 'trades' | 'orders' = 'trades';
   winRate: number = 0;
+  assetFilter: string = '';
 
   constructor(private api: ApiService) {}
 
   ngOnInit(): void {
-    this.loadTrades();
-    this.loadOrders();
+    this.loadData();
   }
 
-  loadTrades(): void {
-    this.api.getTrades(100).subscribe((t) => (this.trades = t));
+  onFilterChange(): void {
+    this.loadData();
+  }
+
+  loadData(): void {
+    const ac = this.assetFilter || undefined;
+    this.api.getTrades(100, ac).subscribe((t) => (this.trades = t));
+    this.api.getOrders(100, ac).subscribe((o) => (this.orders = o));
     this.api.getWinRate().subscribe((r) => (this.winRate = r.win_rate));
-  }
-
-  loadOrders(): void {
-    this.api.getOrders(100).subscribe((o) => (this.orders = o));
   }
 
   getPnlClass(value: string): string {

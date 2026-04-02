@@ -406,6 +406,7 @@ class TradingPipeline:
                 order_id=str(order.id),
                 position_id=str(position.id),
                 symbol=intent.symbol,
+                asset_class=asset_class,
                 fill_price=str(fill.price),
                 quantity=str(fill.quantity),
                 correlation_id=correlation_id,

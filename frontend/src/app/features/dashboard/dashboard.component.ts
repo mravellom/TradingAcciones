@@ -1,5 +1,6 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule, DecimalPipe } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { Subject, interval } from 'rxjs';
 import { takeUntil, switchMap, startWith } from 'rxjs/operators';
 import { ApiService } from '../../core/services/api.service';
@@ -17,7 +18,7 @@ import {
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, ApprovalModalComponent],
+  imports: [CommonModule, FormsModule, ApprovalModalComponent],
   templateUrl: './dashboard.component.html',
   styleUrl: './dashboard.component.scss',
 })
@@ -34,6 +35,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   pendingApprovals: any[] = [];
   selectedApproval: any = null;
   showApprovalModal = false;
+  assetFilter: string = '';
 
   private destroy$ = new Subject<void>();
 
@@ -70,8 +72,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
   loadData(): void {
     this.api.getPortfolio().subscribe((p) => (this.portfolio = p));
     this.api.getOpenPositions().subscribe((p) => (this.openPositions = p));
-    this.api.getTrades(10).subscribe((t) => (this.recentTrades = t));
-    this.api.getSignals(10).subscribe((s) => (this.recentSignals = s));
+    const ac = this.assetFilter || undefined;
+    this.api.getTrades(10, ac).subscribe((t) => (this.recentTrades = t));
+    this.api.getSignals(10, ac).subscribe((s) => (this.recentSignals = s));
     this.api.getHealth().subscribe((h) => (this.health = h));
     this.api.getWinRate().subscribe((r) => (this.winRate = r.win_rate));
     this.api.getAnalyticsSummary().subscribe((s) => (this.summary = s));

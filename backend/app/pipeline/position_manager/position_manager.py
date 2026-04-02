@@ -79,6 +79,7 @@ class PositionManager:
             "position_opened",
             position_id=str(position.id),
             symbol=fill.symbol,
+            asset_class=asset_class,
             entry_price=str(fill.price),
             quantity=str(fill.quantity),
         )

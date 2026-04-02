@@ -9,6 +9,11 @@
     <span class="win-rate" *ngIf="activeTab === 'trades'">
       Win Rate: {{ (winRate * 100).toFixed(1) }}%
     </span>
+    <select class="asset-filter" [(ngModel)]="assetFilter" (change)="onFilterChange()">
+      <option value="">All Markets</option>
+      <option value="CRYPTO">Crypto</option>
+      <option value="STOCKS">Stocks USA</option>
+    </select>
   </div>
 
   <!-- Trades Table -->

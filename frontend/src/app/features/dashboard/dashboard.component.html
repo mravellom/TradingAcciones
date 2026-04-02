@@ -1,4 +1,13 @@
 <div class="dashboard">
+  <!-- Asset Class Filter -->
+  <div class="filter-bar">
+    <select class="asset-filter" [(ngModel)]="assetFilter" (change)="loadData()">
+      <option value="">All Markets</option>
+      <option value="CRYPTO">Crypto</option>
+      <option value="STOCKS">Stocks USA</option>
+    </select>
+  </div>
+
   <!-- System Status Bar -->
   <div class="status-bar" *ngIf="health">
     <span class="status-dot" [class.healthy]="health.system_status === 'RUNNING'"

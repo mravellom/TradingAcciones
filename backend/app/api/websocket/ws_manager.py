@@ -22,6 +22,7 @@ VALID_CHANNELS = {
     "portfolio",
     "risk",
     "system",
+    "prices",
 }
 
 
@@ -84,15 +85,16 @@ class ConnectionManager:
         redis = get_redis()
         pubsub = redis.pubsub()
 
-        # Subscribe to all valid channels
-        channels = list(VALID_CHANNELS)
+        # Subscribe to all valid channels + price pattern
+        channels = [c for c in VALID_CHANNELS if c != "prices"]
         await pubsub.subscribe(*channels)
+        await pubsub.psubscribe("prices:*")
 
         logger.info("ws_redis_listener_started", channels=channels)
 
         try:
             async for message in pubsub.listen():
-                if message["type"] != "message":
+                if message["type"] not in ("message", "pmessage"):
                     continue
 
                 channel = message["channel"]
@@ -104,7 +106,9 @@ class ConnectionManager:
                 except (json.JSONDecodeError, TypeError):
                     continue
 
-                await self.broadcast(channel, data)
+                # Forward prices:AAPL as "prices" channel for subscribers
+                broadcast_channel = "prices" if channel.startswith("prices:") else channel
+                await self.broadcast(broadcast_channel, data)
         except asyncio.CancelledError:
             pass
         except Exception as e:
