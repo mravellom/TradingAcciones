@@ -28,6 +28,7 @@ class StrategyConfigUpdate(BaseModel):
 
 class StrategyConfigResponse(StrategyConfigBase):
     id: uuid.UUID
+    asset_class: str = "CRYPTO"
     is_active: bool
     version: int
     created_at: datetime
