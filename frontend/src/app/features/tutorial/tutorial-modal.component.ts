@@ -19,15 +19,16 @@ export class TutorialModalComponent {
       icon: '1',
       content: `
         <h3>Que es este sistema</h3>
-        <p>Un bot de trading automatizado para criptomonedas en Binance. Analiza el mercado con indicadores tecnicos (RSI, SMA) y Machine Learning (XGBoost), toma decisiones de compra/venta, gestiona riesgo, y ejecuta operaciones de forma autonoma.</p>
+        <p>Un bot de trading automatizado para <strong>criptomonedas (Binance)</strong> y <strong>acciones USA - S&amp;P 500, NASDAQ (Alpaca)</strong>. Analiza el mercado con indicadores tecnicos (RSI, SMA) y Machine Learning (XGBoost), toma decisiones de compra/venta, gestiona riesgo, y ejecuta operaciones de forma autonoma. Ambos mercados corren simultaneamente.</p>
 
         <h3>Stack Tecnologico</h3>
         <div class="tech-grid">
           <div class="tech-item"><span class="label">Backend</span> Python 3.11 + FastAPI</div>
-          <div class="tech-item"><span class="label">Frontend</span> Angular 18 + TypeScript</div>
+          <div class="tech-item"><span class="label">Frontend</span> Angular 20 + TypeScript</div>
           <div class="tech-item"><span class="label">DB</span> PostgreSQL 16</div>
           <div class="tech-item"><span class="label">Cache</span> Redis 7</div>
-          <div class="tech-item"><span class="label">Exchange</span> Binance API</div>
+          <div class="tech-item"><span class="label">Crypto</span> Binance API</div>
+          <div class="tech-item"><span class="label">Stocks</span> Alpaca API</div>
           <div class="tech-item"><span class="label">ML</span> XGBoost + pandas</div>
         </div>
       `
@@ -40,7 +41,7 @@ export class TutorialModalComponent {
         <pre class="diagram">
 Frontend (Angular :4200)
     |  HTTP + WebSocket
-Backend (FastAPI :8000)
+Backend (FastAPI :8001)
     |
     +-- REST API (/api/v1/*)
     +-- WebSocket (/ws)
@@ -53,7 +54,8 @@ Backend (FastAPI :8000)
     +-- PIPELINE DE TRADING
     |   Signal -> Risk -> Capital -> Guard -> Execute
     |
-    +--- Binance API (precios reales)
+    +--- Binance API (crypto 24/7)
+    +--- Alpaca API (stocks 9:30-16:00 ET)
     +--- PostgreSQL (persistencia)
     +--- Redis (cache + estado)
         </pre>
@@ -61,7 +63,8 @@ Backend (FastAPI :8000)
         <h3>Flujo de Comunicacion</h3>
         <ul>
           <li><strong>Frontend -> Backend:</strong> HTTP REST para acciones, WebSocket para datos en tiempo real</li>
-          <li><strong>Backend -> Binance:</strong> REST API para ordenes y datos, WebSocket para precios en vivo</li>
+          <li><strong>Backend -> Binance:</strong> REST + WebSocket para crypto (24/7)</li>
+          <li><strong>Backend -> Alpaca:</strong> REST + WebSocket para acciones USA (Lun-Vie 9:30-16:00 ET, con festivos)</li>
           <li><strong>Backend -> PostgreSQL:</strong> SQLAlchemy async para persistencia</li>
           <li><strong>Backend -> Redis:</strong> Cache de precios, estado del sistema, circuit breaker</li>
         </ul>
@@ -77,7 +80,7 @@ Backend (FastAPI :8000)
             <div class="step-num">1</div>
             <div class="step-content">
               <strong>Obtener datos</strong>
-              <p>Binance API envia 100 velas de 1 hora (open, high, low, close, volume)</p>
+              <p>Binance (crypto) o Alpaca (stocks) envian velas historicas (open, high, low, close, volume)</p>
             </div>
           </div>
           <div class="step">
@@ -105,14 +108,14 @@ Backend (FastAPI :8000)
             <div class="step-num">5</div>
             <div class="step-content">
               <strong>Validar mercado</strong>
-              <p>Execution Guard verifica: price drift < 0.5%, spread < 0.3%, volume > $100K</p>
+              <p>Execution Guard verifica con thresholds por mercado: Crypto (drift 0.5%, spread 0.3%, vol $100K) vs Stocks (drift 0.2%, spread 0.1%, vol $1M)</p>
             </div>
           </div>
           <div class="step">
             <div class="step-num">6</div>
             <div class="step-content">
               <strong>Ejecutar</strong>
-              <p>Paper: simula fill con 0.05% slippage. LIVE: orden MARKET real a Binance con retry y reconciliacion</p>
+              <p>Paper: simula fill (0.05% slippage crypto, 0.01% stocks). LIVE: orden real a Binance (crypto) o Alpaca (stocks)</p>
             </div>
           </div>
           <div class="step">
@@ -156,6 +159,16 @@ Backend (FastAPI :8000)
 
         <h3>Combinacion (Composite)</h3>
         <p>Senal final = ML x 60% + RSI x 20% + SMA x 20%</p>
+
+        <h3>Parametros por Mercado</h3>
+        <table>
+          <tr><th>Parametro</th><th>Crypto</th><th>Stocks</th></tr>
+          <tr><td>RSI oversold/overbought</td><td>30 / 70</td><td>35 / 65</td></tr>
+          <tr><td>SMA rapida / lenta</td><td>9 / 21</td><td>10 / 30</td></tr>
+          <tr><td>Stop Loss</td><td>2%</td><td>1.5%</td></tr>
+          <tr><td>Take Profit</td><td>4%</td><td>3%</td></tr>
+        </table>
+        <p>Las acciones son menos volatiles, por eso usan thresholds mas ajustados.</p>
       `
     },
     {
@@ -231,6 +244,9 @@ Backend (FastAPI :8000)
           <tr><td>EXECUTION_MODE</td><td>PAPER</td><td>PAPER o LIVE</td></tr>
           <tr><td>API_KEY</td><td>(vacio)</td><td>Protege los endpoints</td></tr>
           <tr><td>BINANCE_TESTNET</td><td>true</td><td>true=testnet, false=produccion</td></tr>
+          <tr><td>ALPACA_ENABLED</td><td>false</td><td>Activa acciones USA</td></tr>
+          <tr><td>ALPACA_API_KEY</td><td>(vacio)</td><td>API key de Alpaca</td></tr>
+          <tr><td>STOCK_SYMBOLS</td><td>AAPL,MSFT...</td><td>Acciones a monitorear</td></tr>
           <tr><td>RISK_MAX_DAILY_LOSS_PCT</td><td>0.03</td><td>Maximo 3% perdida diaria</td></tr>
           <tr><td>RISK_MAX_POSITIONS</td><td>5</td><td>Maximo 5 posiciones</td></tr>
           <tr><td>RISK_PER_TRADE_PCT</td><td>0.01</td><td>1% riesgo por trade</td></tr>
@@ -268,6 +284,10 @@ Backend (FastAPI :8000)
           <tr><td><strong>Confidence</strong></td><td>Nivel de certeza de una senal (0.0 a 1.0)</td></tr>
           <tr><td><strong>XGBoost</strong></td><td>Algoritmo de ML basado en gradient boosted trees</td></tr>
           <tr><td><strong>Backtest</strong></td><td>Simular una estrategia sobre datos historicos</td></tr>
+          <tr><td><strong>Asset Class</strong></td><td>Tipo de activo: CRYPTO (criptomonedas) o STOCKS (acciones USA)</td></tr>
+          <tr><td><strong>Alpaca</strong></td><td>Broker/API gratuito para trading de acciones USA</td></tr>
+          <tr><td><strong>Market Hours</strong></td><td>Horario del mercado USA: Lun-Vie 9:30-16:00 ET</td></tr>
+          <tr><td><strong>S&amp;P 500</strong></td><td>Indice de las 500 empresas mas grandes de USA (SPY es su ETF)</td></tr>
         </table>
       `
     }
