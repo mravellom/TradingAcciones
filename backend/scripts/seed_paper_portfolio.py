@@ -8,7 +8,7 @@ from decimal import Decimal
 
 from app.config import settings
 from app.core.database import async_session_factory
-from app.domain.enums import ExecutionMode
+from app.domain.enums import ExecutionMode, RiskProfileType
 from app.models.risk_config import RiskConfig
 from app.models.strategy_config import StrategyConfig
 from app.services.portfolio_service import PortfolioService
@@ -24,14 +24,26 @@ async def seed():
         )
         print(f"Paper portfolio: {portfolio.total_balance} USDT")
 
-        # Create default risk config
+        # Create default risk config (ULTRA_CONSERVADOR — active)
         from sqlalchemy import select
         stmt = select(RiskConfig).where(RiskConfig.name == "default")
         result = await session.execute(stmt)
-        if result.scalar_one_or_none() is None:
-            risk = RiskConfig(name="default")
+        existing = result.scalar_one_or_none()
+        if existing is None:
+            risk = RiskConfig(
+                name="default",
+                profile_type=RiskProfileType.ULTRA_CONSERVADOR.value,
+                min_confidence=Decimal("0.60"),
+                max_positions=5,
+                max_exposure_per_symbol_pct=Decimal("0.10"),
+                risk_per_trade_pct=Decimal("0.01"),
+                allow_partial_signal_agreement=False,
+                min_agreeing_signals=3,
+                use_atr_for_sl_tp=False,
+                is_active=True,
+            )
             session.add(risk)
-            print("Default risk config created")
+            print("Default risk config created (ULTRA_CONSERVADOR, active)")
         else:
             print("Default risk config already exists")
 

@@ -13,6 +13,7 @@ Usage:
 import asyncio
 import signal
 import sys
+from decimal import Decimal
 
 import uvicorn
 
@@ -22,6 +23,7 @@ from app.core.logging import get_logger, setup_logging
 from app.domain.enums import ExecutionMode
 from app.exchange.binance_client import BinanceClient
 from app.ml.serving.ml_signal_generator import MLSignalGenerator
+from app.models.risk_config import RiskConfig
 from app.pipeline.capital_manager.capital_manager import CapitalManager
 from app.pipeline.execution.guard import ExecutionGuard
 from app.pipeline.execution.paper_engine import PaperEngine
@@ -40,15 +42,36 @@ setup_logging()
 logger = get_logger(__name__)
 
 
-def _create_ml_strategy(strategy_id, symbols):
+async def _load_risk_profile() -> RiskConfig | None:
+    """Load the active risk config from DB."""
+    from sqlalchemy import select
+    async with async_session_factory() as session:
+        stmt = select(RiskConfig).where(RiskConfig.is_active == True)
+        result = await session.execute(stmt)
+        return result.scalar_one_or_none()
+
+
+def _create_ml_strategy(strategy_id, symbols, risk_config: RiskConfig | None = None):
     """Create ML composite strategy. Falls back to None if models missing."""
     from app.pipeline.strategy.ml_composite import MLCompositeStrategy
+
+    # Extract profile params
+    kwargs = {}
+    if risk_config:
+        kwargs = {
+            "min_confidence": risk_config.min_confidence,
+            "min_agreeing_signals": risk_config.min_agreeing_signals if risk_config.allow_partial_signal_agreement else None,
+            "use_atr_for_sl_tp": risk_config.use_atr_for_sl_tp,
+            "atr_period": risk_config.atr_period,
+            "atr_sl_multiplier": risk_config.atr_sl_multiplier,
+            "atr_tp_multiplier": risk_config.atr_tp_multiplier,
+        }
 
     # Create one strategy per symbol that has a trained model
     strategies = []
     for sym in symbols:
         try:
-            s = MLCompositeStrategy(strategy_id=strategy_id, symbol=sym)
+            s = MLCompositeStrategy(strategy_id=strategy_id, symbol=sym, **kwargs)
             strategies.append(s)
             logger.info("ml_composite_loaded", symbol=sym, weights="ML=0.6 RSI=0.2 SMA=0.2")
         except ValueError:
@@ -66,6 +89,32 @@ def _create_ml_strategy(strategy_id, symbols):
 async def start_background_tasks():
     """Start all background tasks."""
     logger.info("starting_background_tasks")
+
+    # Load active risk profile
+    risk_config = await _load_risk_profile()
+    if risk_config:
+        logger.info(
+            "risk_profile_loaded",
+            profile=risk_config.profile_type,
+            min_confidence=str(risk_config.min_confidence),
+            max_positions=risk_config.max_positions,
+            partial_agreement=risk_config.allow_partial_signal_agreement,
+            use_atr=risk_config.use_atr_for_sl_tp,
+        )
+    else:
+        logger.warning("no_risk_config_found_using_defaults")
+
+    # Profile-aware strategy kwargs
+    strategy_kwargs = {}
+    if risk_config:
+        strategy_kwargs = {
+            "min_confidence": risk_config.min_confidence,
+            "min_agreeing_signals": risk_config.min_agreeing_signals if risk_config.allow_partial_signal_agreement else None,
+            "use_atr_for_sl_tp": risk_config.use_atr_for_sl_tp,
+            "atr_period": risk_config.atr_period,
+            "atr_sl_multiplier": risk_config.atr_sl_multiplier,
+            "atr_tp_multiplier": risk_config.atr_tp_multiplier,
+        }
 
     # Exchange client
     exchange = BinanceClient()
@@ -115,16 +164,16 @@ async def start_background_tasks():
         market_data = MarketDataService(exchange, stock_exchange=alpaca_exchange)
 
         # Create ML-enhanced strategies (one per symbol)
-        ml_strategies = _create_ml_strategy(strategy_id, symbols)
+        ml_strategies = _create_ml_strategy(strategy_id, symbols, risk_config)
         if ml_strategies:
             strategies = ml_strategies
         else:
-            strategies = [MomentumStrategy(strategy_id=strategy_id)]
+            strategies = [MomentumStrategy(strategy_id=strategy_id, **strategy_kwargs)]
 
         # Add stock strategy if Alpaca is enabled
         if alpaca_exchange:
             from uuid import uuid4
-            stock_strategy = StockMomentumStrategy(strategy_id=uuid4())
+            stock_strategy = StockMomentumStrategy(strategy_id=uuid4(), **strategy_kwargs)
             stock_strategy.symbols = settings.stock_symbols
             strategies.append(stock_strategy)
             logger.info("stock_momentum_strategy_added", symbols=settings.stock_symbols)

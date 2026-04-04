@@ -25,6 +25,39 @@
     </div>
   </div>
 
+  <!-- Risk Profile Toggle -->
+  <div class="section">
+    <h3>Risk Profile</h3>
+    <div class="profile-toggle">
+      <div class="toggle-buttons">
+        <button class="profile-btn"
+                [class.active]="riskProfile?.profile_type === 'ULTRA_CONSERVADOR'"
+                [disabled]="!canSwitchProfile || riskProfile?.profile_type === 'ULTRA_CONSERVADOR'"
+                (click)="switchProfile('ULTRA_CONSERVADOR')">
+          ULTRA CONSERVADOR
+        </button>
+        <button class="profile-btn aggressive"
+                [class.active]="riskProfile?.profile_type === 'DEFENSIVO_AGRESIVO'"
+                [disabled]="!canSwitchProfile || riskProfile?.profile_type === 'DEFENSIVO_AGRESIVO'"
+                (click)="switchProfile('DEFENSIVO_AGRESIVO')">
+          DEFENSIVO AGRESIVO
+        </button>
+      </div>
+      <div class="profile-summary" *ngIf="riskProfile">
+        <span>Confianza min: {{ formatPercent(riskProfile.min_confidence) }}</span>
+        <span>Max posiciones: {{ riskProfile.max_positions }}</span>
+        <span>Riesgo/trade: {{ formatPercent(riskProfile.risk_per_trade_pct) }}</span>
+        <span>ATR: {{ riskProfile.use_atr_for_sl_tp ? 'Si' : 'No' }}</span>
+        <span>Acuerdo parcial: {{ riskProfile.allow_partial_signal_agreement ? 'Si (' + riskProfile.min_agreeing_signals + '/3)' : 'No' }}</span>
+      </div>
+      <div class="profile-disabled-hint"
+           *ngIf="!canSwitchProfile && riskStatus">
+        <span *ngIf="health?.system_status !== 'RUNNING'">Sistema no esta en RUNNING</span>
+        <span *ngIf="riskStatus.circuit_breaker_active">Circuit breaker activo</span>
+      </div>
+    </div>
+  </div>
+
   <!-- Risk Status -->
   <div class="section" *ngIf="riskStatus">
     <h3>Risk Status</h3>
@@ -63,22 +96,22 @@
     <div class="risk-grid">
       <div class="card">
         <div class="card-header">Market Status</div>
-        <div class="card-value" [class.positive]="health.alpaca?.market_open"
-             [class.negative]="!health.alpaca?.market_open">
-          {{ health.alpaca?.market_open ? 'OPEN' : 'CLOSED' }}
+        <div class="card-value" [class.positive]="health!.alpaca?.market_open"
+             [class.negative]="!health!.alpaca?.market_open">
+          {{ health!.alpaca?.market_open ? 'OPEN' : 'CLOSED' }}
         </div>
       </div>
       <div class="card">
         <div class="card-header">Alpaca WebSocket</div>
-        <div class="card-value" [class.positive]="health.alpaca?.ws_connected"
-             [class.negative]="!health.alpaca?.ws_connected">
-          {{ health.alpaca?.ws_connected ? 'CONNECTED' : 'DISCONNECTED' }}
+        <div class="card-value" [class.positive]="health!.alpaca?.ws_connected"
+             [class.negative]="!health!.alpaca?.ws_connected">
+          {{ health!.alpaca?.ws_connected ? 'CONNECTED' : 'DISCONNECTED' }}
         </div>
       </div>
       <div class="card">
         <div class="card-header">Stock Symbols</div>
         <div class="card-value" style="font-size: 14px;">
-          {{ health.alpaca?.stock_symbols?.length || 0 }} active
+          {{ health!.alpaca?.stock_symbols?.length || 0 }} active
         </div>
       </div>
       <div class="card">

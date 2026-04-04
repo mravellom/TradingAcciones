@@ -11,6 +11,7 @@ from uuid import UUID
 
 from app.domain.enums import SignalType
 from app.exchange.base import Kline
+from app.pipeline.signal_engine.atr import calculate_atr
 from app.pipeline.signal_engine.composite import CompositeSignalGenerator
 from app.pipeline.signal_engine.rsi import RSISignalGenerator
 from app.pipeline.signal_engine.sma_crossover import SMACrossoverSignalGenerator
@@ -38,6 +39,7 @@ class StockMomentumStrategy(Strategy):
     - SMA: 10/30 crossover (stocks trend slower than crypto)
     - SL/TP: 1.5%/3% (stocks are less volatile)
     - RSI weight 0.5, SMA weight 0.5 (equal weighting)
+    - Supports ATR-based SL/TP when configured.
     """
 
     def __init__(
@@ -51,6 +53,11 @@ class StockMomentumStrategy(Strategy):
         rsi_weight: float = 0.5,
         sma_weight: float = 0.5,
         min_confidence: Decimal = Decimal("0.6"),
+        min_agreeing_signals: int | None = None,
+        use_atr_for_sl_tp: bool = False,
+        atr_period: int = 14,
+        atr_sl_multiplier: Decimal = Decimal("1.5"),
+        atr_tp_multiplier: Decimal = Decimal("3.0"),
     ):
         self._id = strategy_id
         self._composite = CompositeSignalGenerator(
@@ -76,7 +83,12 @@ class StockMomentumStrategy(Strategy):
                 ),
             ],
             min_confidence=min_confidence,
+            min_agreeing_signals=min_agreeing_signals,
         )
+        self._use_atr = use_atr_for_sl_tp
+        self._atr_period = atr_period
+        self._atr_sl_mult = atr_sl_multiplier
+        self._atr_tp_mult = atr_tp_multiplier
 
     @property
     def id(self) -> UUID:
@@ -97,13 +109,27 @@ class StockMomentumStrategy(Strategy):
         if signal.signal_type == SignalType.HOLD:
             return None
 
+        stop_loss = signal.stop_loss
+        take_profit = signal.take_profit
+
+        # Override SL/TP with ATR if configured
+        if self._use_atr:
+            atr = calculate_atr(klines, self._atr_period)
+            if atr and atr > 0:
+                if signal.signal_type == SignalType.BUY:
+                    stop_loss = signal.entry_price - (atr * self._atr_sl_mult)
+                    take_profit = signal.entry_price + (atr * self._atr_tp_mult)
+                else:
+                    stop_loss = signal.entry_price + (atr * self._atr_sl_mult)
+                    take_profit = signal.entry_price - (atr * self._atr_tp_mult)
+
         return TradeIntent(
             symbol=symbol,
             action=signal.signal_type,
             confidence=signal.confidence,
             entry_price=signal.entry_price,
-            stop_loss=signal.stop_loss,
-            take_profit=signal.take_profit,
+            stop_loss=stop_loss,
+            take_profit=take_profit,
             strategy_id=self._id,
             timeframe=timeframe,
             indicators=signal.indicators,

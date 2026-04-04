@@ -1,3 +1,4 @@
+from collections import Counter
 from decimal import Decimal
 
 from app.core.logging import get_logger
@@ -12,8 +13,9 @@ class CompositeSignalGenerator:
     """Combines multiple signal generators into a single weighted signal.
 
     Rules:
-    - If generators disagree (BUY vs SELL), return None (no signal).
-    - If generators agree, combine confidence as weighted average.
+    - If min_agreeing_signals >= total generators (or None): all must agree (unanimous).
+    - If min_agreeing_signals < total: partial agreement allowed — the majority
+      direction is used if it has at least min_agreeing_signals votes.
     - Only returns a signal if combined confidence >= min_confidence.
     """
 
@@ -21,6 +23,7 @@ class CompositeSignalGenerator:
         self,
         generators: list[tuple[SignalGenerator, float]],  # (generator, weight)
         min_confidence: Decimal = Decimal("0.6"),
+        min_agreeing_signals: int | None = None,
     ):
         total_weight = sum(w for _, w in generators)
         # Normalize weights
@@ -28,6 +31,7 @@ class CompositeSignalGenerator:
             (gen, w / total_weight) for gen, w in generators
         ]
         self._min_confidence = min_confidence
+        self._min_agreeing = min_agreeing_signals
 
     async def generate(self, symbol: str, klines: list[Kline]) -> SignalResult | None:
         """Run all generators and combine results."""
@@ -49,15 +53,58 @@ class CompositeSignalGenerator:
         if not results:
             return None
 
-        # Check agreement: all signals must be the same type
+        # Check agreement
         signal_types = {r.signal_type for r, _ in results}
+
         if len(signal_types) > 1:
+            # Disagreement — check if partial agreement is allowed
+            total_generators = len(self._generators)
+            min_needed = self._min_agreeing if self._min_agreeing is not None else total_generators
+
+            if min_needed >= total_generators:
+                # Unanimous required but disagreement found
+                logger.info(
+                    "signal_disagreement",
+                    symbol=symbol,
+                    types=[str(t) for t in signal_types],
+                )
+                return None
+
+            # Count votes per direction
+            votes: Counter[SignalType] = Counter()
+            for r, _ in results:
+                votes[r.signal_type] += 1
+
+            majority_type, majority_count = votes.most_common(1)[0]
+
+            if majority_count < min_needed:
+                logger.info(
+                    "signal_partial_agreement_insufficient",
+                    symbol=symbol,
+                    votes=dict(votes),
+                    min_needed=min_needed,
+                )
+                return None
+
+            # Filter to only agreeing generators
+            excluded = [
+                gen.name for gen, _ in self._generators
+                if any(r.signal_type != majority_type for r, _ in results if id(r) == id(r))
+            ]
+            agreeing = [(r, w) for r, w in results if r.signal_type == majority_type]
+            excluded_names = [r.indicators.get("generator", "unknown")
+                             for r, _ in results if r.signal_type != majority_type]
+
             logger.info(
-                "signal_disagreement",
+                "signal_partial_agreement_accepted",
                 symbol=symbol,
-                types=[str(t) for t in signal_types],
+                direction=majority_type.value,
+                agreeing=majority_count,
+                total=len(results),
+                excluded=excluded_names,
             )
-            return None
+
+            results = agreeing
 
         signal_type = results[0][0].signal_type
 

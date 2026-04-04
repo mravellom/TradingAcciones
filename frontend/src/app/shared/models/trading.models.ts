@@ -83,6 +83,8 @@ export interface Trade {
   closed_at: string;
 }
 
+export type RiskProfileType = 'ULTRA_CONSERVADOR' | 'DEFENSIVO_AGRESIVO';
+
 export interface RiskStatus {
   circuit_breaker_active: boolean;
   system_status: string;
@@ -90,6 +92,23 @@ export interface RiskStatus {
   daily_loss_limit: string;
   open_positions: number;
   max_positions: number;
+  active_profile: RiskProfileType;
+}
+
+export interface RiskProfile {
+  profile_type: RiskProfileType;
+  min_confidence: string;
+  max_positions: number;
+  max_exposure_per_symbol_pct: string;
+  risk_per_trade_pct: string;
+  allow_partial_signal_agreement: boolean;
+  min_agreeing_signals: number;
+  use_atr_for_sl_tp: boolean;
+  atr_period: number;
+  atr_sl_multiplier: string;
+  atr_tp_multiplier: string;
+  max_daily_loss_pct: string;
+  max_drawdown_pct: string;
 }
 
 export interface AlpacaStatus {

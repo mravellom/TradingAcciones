@@ -8,6 +8,7 @@ import {
   Position,
   Trade,
   RiskStatus,
+  RiskProfile,
   HealthStatus,
 } from '../../shared/models/trading.models';
 import { environment } from '../../../environments/environment';
@@ -87,6 +88,16 @@ export class ApiService {
   // Risk
   getRiskStatus(): Observable<RiskStatus> {
     return this.http.get<RiskStatus>(`${BASE_URL}/risk/status`);
+  }
+
+  getRiskProfile(): Observable<RiskProfile> {
+    return this.http.get<RiskProfile>(`${BASE_URL}/risk/profile`);
+  }
+
+  switchRiskProfile(profileType: string): Observable<RiskProfile> {
+    return this.http.post<RiskProfile>(`${BASE_URL}/risk/profile/switch`, {
+      profile_type: profileType,
+    });
   }
 
   // Market
