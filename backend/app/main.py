@@ -102,6 +102,7 @@ async def lifespan(app: FastAPI):
     # ── Background trading tasks (SignalScanner, PositionMonitor, DailyReset) ──
     background_tasks: list[asyncio.Task] = []
     scanner = None
+    signal_executor = None
     position_monitor = None
     daily_reset = None
     exchange_client = None
@@ -194,7 +195,32 @@ async def lifespan(app: FastAPI):
             background_tasks.append(asyncio.create_task(scanner.start()))
             logger.info("signal_scanner_started", strategies=len(strategies), interval=60)
 
-        # 2. Position Monitor
+        # 2. Signal Executor (signal → risk → capital → execution → position)
+        from app.pipeline.capital_manager.capital_manager import CapitalManager
+        from app.pipeline.execution.guard import ExecutionGuard
+        from app.pipeline.execution.paper_engine import PaperEngine
+        from app.tasks.signal_executor import SignalExecutor
+
+        paper_engine = PaperEngine()
+        guard = ExecutionGuard(
+            max_price_drift_pct=Decimal(str(settings.guard_max_price_drift_pct)),
+            max_spread_pct=Decimal(str(settings.guard_max_spread_pct)),
+            min_volume_24h=Decimal(str(settings.guard_min_volume_24h)),
+            stock_max_price_drift_pct=Decimal(str(settings.guard_stock_max_price_drift_pct)),
+            stock_max_spread_pct=Decimal(str(settings.guard_stock_max_spread_pct)),
+            stock_min_volume_24h=Decimal(str(settings.guard_stock_min_volume_24h)),
+        )
+
+        signal_executor = SignalExecutor(
+            executor=paper_engine,
+            guard=guard,
+            market_data=market_data,
+            session_factory=async_session_factory,
+        )
+        background_tasks.append(asyncio.create_task(signal_executor.start()))
+        logger.info("signal_executor_started")
+
+        # 3. Position Monitor
         exec_mode = (
             ExecutionMode.LIVE
             if settings.execution_mode.upper() == "LIVE"
@@ -208,7 +234,7 @@ async def lifespan(app: FastAPI):
         background_tasks.append(asyncio.create_task(position_monitor.start()))
         logger.info("position_monitor_started", interval=5)
 
-        # 3. Daily Reset
+        # 4. Daily Reset
         daily_reset = DailyResetTask(session_factory=async_session_factory)
         background_tasks.append(asyncio.create_task(daily_reset.start()))
         logger.info("daily_reset_started")
@@ -231,6 +257,8 @@ async def lifespan(app: FastAPI):
     # Stop background trading tasks
     if scanner:
         await scanner.stop()
+    if signal_executor:
+        await signal_executor.stop()
     if position_monitor:
         await position_monitor.stop()
     if daily_reset:
