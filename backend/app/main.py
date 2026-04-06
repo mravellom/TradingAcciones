@@ -99,16 +99,150 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.error("runtime_reconciler_launch_failed", error=str(e))
 
+    # ── Background trading tasks (SignalScanner, PositionMonitor, DailyReset) ──
+    background_tasks: list[asyncio.Task] = []
+    scanner = None
+    position_monitor = None
+    daily_reset = None
+    exchange_client = None
+
+    try:
+        from decimal import Decimal
+
+        from sqlalchemy import select
+
+        from app.domain.enums import ExecutionMode
+        from app.models.risk_config import RiskConfig
+        from app.models.strategy_config import StrategyConfig
+        from app.pipeline.strategy.momentum import MomentumStrategy
+        from app.pipeline.strategy.stock_momentum import StockMomentumStrategy
+        from app.services.market_data import MarketDataService
+        from app.tasks.daily_reset import DailyResetTask
+        from app.tasks.position_monitor import PositionMonitor
+        from app.tasks.signal_scanner import SignalScanner
+
+        # Load active risk profile
+        risk_config = None
+        async with async_session_factory() as session:
+            stmt = select(RiskConfig).where(RiskConfig.is_active == True)
+            result = await session.execute(stmt)
+            risk_config = result.scalar_one_or_none()
+
+        strategy_kwargs = {}
+        if risk_config:
+            strategy_kwargs = {
+                "min_confidence": risk_config.min_confidence,
+                "min_agreeing_signals": (
+                    risk_config.min_agreeing_signals
+                    if risk_config.allow_partial_signal_agreement
+                    else None
+                ),
+                "use_atr_for_sl_tp": risk_config.use_atr_for_sl_tp,
+                "atr_period": risk_config.atr_period,
+                "atr_sl_multiplier": risk_config.atr_sl_multiplier,
+                "atr_tp_multiplier": risk_config.atr_tp_multiplier,
+            }
+            logger.info(
+                "risk_profile_loaded",
+                profile=risk_config.profile_type,
+                min_confidence=str(risk_config.min_confidence),
+            )
+
+        # Load active strategies from DB
+        async with async_session_factory() as session:
+            stmt = select(StrategyConfig).where(StrategyConfig.is_active == True)
+            result = await session.execute(stmt)
+            active_configs = list(result.scalars().all())
+
+        # Build strategy instances
+        strategies = []
+        for cfg in active_configs:
+            if cfg.strategy_type == "stock_momentum":
+                s = StockMomentumStrategy(strategy_id=cfg.id, **strategy_kwargs)
+                s.symbols = cfg.symbols or settings.stock_symbols
+                strategies.append(s)
+                logger.info("strategy_loaded", name=cfg.name, type=cfg.strategy_type, symbols=s.symbols)
+            elif cfg.strategy_type == "momentum":
+                s = MomentumStrategy(strategy_id=cfg.id, **strategy_kwargs)
+                s.symbols = cfg.symbols or ["BTCUSDT", "ETHUSDT"]
+                strategies.append(s)
+                logger.info("strategy_loaded", name=cfg.name, type=cfg.strategy_type, symbols=s.symbols)
+
+        # Build MarketDataService — needs at least one exchange
+        exchange_client = None
+        try:
+            from app.exchange.binance_client import BinanceClient
+            exchange_client = BinanceClient()
+            await exchange_client.connect()
+            logger.info("binance_client_connected")
+        except Exception as e:
+            logger.warning("binance_connect_skipped", error=str(e))
+
+        market_data = MarketDataService(
+            exchange=exchange_client or alpaca_client,
+            stock_exchange=alpaca_client if exchange_client else None,
+        )
+
+        # 1. Signal Scanner
+        if strategies:
+            scanner = SignalScanner(
+                strategies=strategies,
+                market_data=market_data,
+                session_factory=async_session_factory,
+                scan_interval=60,
+            )
+            background_tasks.append(asyncio.create_task(scanner.start()))
+            logger.info("signal_scanner_started", strategies=len(strategies), interval=60)
+
+        # 2. Position Monitor
+        exec_mode = (
+            ExecutionMode.LIVE
+            if settings.execution_mode.upper() == "LIVE"
+            else ExecutionMode.PAPER
+        )
+        position_monitor = PositionMonitor(
+            session_factory=async_session_factory,
+            execution_mode=exec_mode,
+            check_interval=5,
+        )
+        background_tasks.append(asyncio.create_task(position_monitor.start()))
+        logger.info("position_monitor_started", interval=5)
+
+        # 3. Daily Reset
+        daily_reset = DailyResetTask(session_factory=async_session_factory)
+        background_tasks.append(asyncio.create_task(daily_reset.start()))
+        logger.info("daily_reset_started")
+
+    except Exception as e:
+        logger.error("background_tasks_init_failed", error=str(e))
+
     logger.info(
         "trading_platform_started",
         execution_mode=settings.execution_mode,
         debug=settings.debug,
+        background_tasks=len(background_tasks),
     )
 
     yield
 
     # Graceful Shutdown
     logger.info("shutting_down_trading_platform")
+
+    # Stop background trading tasks
+    if scanner:
+        await scanner.stop()
+    if position_monitor:
+        await position_monitor.stop()
+    if daily_reset:
+        await daily_reset.stop()
+    for t in background_tasks:
+        t.cancel()
+        try:
+            await t
+        except asyncio.CancelledError:
+            pass
+    if background_tasks:
+        logger.info("background_tasks_stopped", count=len(background_tasks))
 
     # Stop Alpaca WebSocket
     if alpaca_ws_task is not None and alpaca_ws is not None:
@@ -125,6 +259,13 @@ async def lifespan(app: FastAPI):
     if alpaca_client is not None:
         try:
             await alpaca_client.disconnect()
+        except Exception:
+            pass
+
+    # Disconnect Binance if connected
+    if exchange_client is not None:
+        try:
+            await exchange_client.disconnect()
         except Exception:
             pass
 

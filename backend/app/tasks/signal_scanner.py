@@ -142,6 +142,7 @@ class SignalScanner:
                 expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
             )
             session.add(signal)
+            await session.flush()  # Assign signal.id before using it
 
             # Event sourcing
             event_repo = EventRepository(session)
