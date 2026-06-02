@@ -36,6 +36,10 @@ class Order(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     execution_mode: Mapped[str] = mapped_column(String(10), nullable=False)  # PAPER/LIVE
     exchange_order_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
+    risk_profile_type: Mapped[str] = mapped_column(
+        String(30), nullable=False, server_default=text("'ULTRA_CONSERVADOR'")
+    )
+
     risk_decision: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     capital_decision: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
 

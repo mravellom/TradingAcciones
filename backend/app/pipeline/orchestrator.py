@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.core.logging import get_logger
 from app.core.redis import get_redis
+from app.core.retry import retry_async
 from app.domain.enums import (
     AggregateType,
     AssetClass,
@@ -43,6 +44,9 @@ from app.repositories.position_repo import PositionRepository
 from app.services.portfolio_service import PortfolioService
 
 logger = get_logger(__name__)
+
+REDIS_PROFILE_KEY = "risk:active_profile"
+DEFAULT_PROFILE = "ULTRA_CONSERVADOR"
 
 
 @dataclass
@@ -115,6 +119,16 @@ class TradingPipeline:
         self._tracker = TradeTracker(session)
         self._event_repo = EventRepository(session)
         self._position_repo = PositionRepository(session)
+
+    async def _get_active_profile_type(self) -> str:
+        """Read active risk profile from Redis cache, fallback to default."""
+        try:
+            profile = await self._redis.get(REDIS_PROFILE_KEY)
+            if profile:
+                return profile
+        except Exception:
+            pass
+        return DEFAULT_PROFILE
 
     async def execute(
         self,
@@ -208,6 +222,18 @@ class TradingPipeline:
                     reason="Capital manager: position too small or impossible",
                 )
 
+            # 4b. Apply REDUCE_SIZE if risk manager requested it
+            if risk_decision.action == RiskAction.REDUCE_SIZE:
+                max_qty = risk_decision.details.get("max_qty")
+                if max_qty is not None and Decimal(str(max_qty)) < sizing.quantity:
+                    sizing.quantity = Decimal(str(max_qty))
+                    logger.info(
+                        "risk_reduced_size",
+                        rule=risk_decision.rule,
+                        max_qty=str(max_qty),
+                        reason=risk_decision.reason,
+                    )
+
             # 5. Verify sufficient balance BEFORE execution
             fill_value = sizing.quantity * intent.entry_price
             if portfolio.available_balance < fill_value:
@@ -233,6 +259,8 @@ class TradingPipeline:
             quantity = guard_result.adjusted_quantity or sizing.quantity
 
             # 7. Create signal + order records
+            active_profile = await self._get_active_profile_type()
+
             asset_class = (
                 AssetClass.STOCKS.value
                 if intent.symbol in settings.stock_symbols
@@ -255,7 +283,6 @@ class TradingPipeline:
             await self._session.flush()
 
             # Determine initial order status based on manual approval mode
-            from app.config import settings
             if settings.require_manual_approval:
                 initial_status = OrderStatus.PENDING_APPROVAL.value
             else:
@@ -273,6 +300,7 @@ class TradingPipeline:
                 stop_loss=intent.stop_loss,
                 take_profit=intent.take_profit,
                 execution_mode=self._executor.mode.value,
+                risk_profile_type=active_profile,
                 risk_decision={
                     "action": risk_decision.action.value,
                     "rules_passed": len(self._risk._rules),
@@ -323,118 +351,22 @@ class TradingPipeline:
 
             await self._tracker.record_order_submitted(order.id, correlation_id)
 
-            # 8. Persist SUBMITTING state to DISK before sending to exchange.
-            # This is a real commit (not just flush) so it survives crashes.
-            # If the process crashes after Binance accepts but before the final commit,
-            # the startup/runtime reconciler will find this SUBMITTING order and reconcile.
-            order.status = OrderStatus.SUBMITTING.value
-            await self._session.commit()
-
-            fill = await self._executor.submit(
-                order_id=order.id,
+            # 8-11. Submit, fill, position, portfolio update
+            return await self._submit_fill_position(
+                order=order,
+                quantity=quantity,
                 symbol=intent.symbol,
                 side=OrderSide(order.side),
-                quantity=quantity,
                 price=intent.entry_price,
-            )
-
-            # 9. Handle fill (full or partial)
-            if fill.quantity >= quantity:
-                order.status = OrderStatus.FILLED.value
-            else:
-                order.status = OrderStatus.PARTIALLY_FILLED.value
-                logger.warning(
-                    "partial_fill",
-                    order_id=str(order.id),
-                    requested=str(quantity),
-                    filled=str(fill.quantity),
-                )
-
-            order.filled_qty = fill.quantity
-            order.avg_fill_price = fill.price
-            order.exchange_order_id = fill.exchange_order_id
-
-            await self._tracker.record_order_filled(
-                order.id, fill.price, fill.quantity, fill.slippage, correlation_id
-            )
-
-            # 10. Create position (use ACTUAL fill qty, not requested)
-            position = await self._position_mgr.open_position(
-                fill=fill,
                 stop_loss=intent.stop_loss,
                 take_profit=intent.take_profit,
                 strategy_id=intent.strategy_id,
-                signal_confidence=intent.confidence,
-                execution_mode=self._executor.mode.value,
+                confidence=intent.confidence,
                 asset_class=asset_class,
-            )
-
-            # 10b. Place exchange-level SL/TP for LIVE mode
-            if self._executor.mode == ExecutionMode.LIVE:
-                try:
-                    from app.pipeline.execution.binance_executor import BinanceExecutor
-                    if isinstance(self._executor, BinanceExecutor):
-                        oco_id = await self._executor.place_oco_order(
-                            symbol=intent.symbol,
-                            quantity=fill.quantity,
-                            stop_loss=intent.stop_loss,
-                            take_profit=intent.take_profit,
-                        )
-                        if oco_id:
-                            position.oco_order_id = oco_id
-                            await self._session.flush()
-                except Exception as oco_err:
-                    logger.error(
-                        "oco_placement_failed",
-                        position_id=str(position.id),
-                        error=str(oco_err),
-                    )
-
-            # 11. Update portfolio atomically via SQL UPDATE
-            # already_locked=True because we hold the FOR UPDATE lock from step 2
-            actual_fill_value = fill.price * fill.quantity
-            portfolio_svc = PortfolioService(self._session)
-            await portfolio_svc.record_fill(
-                ExecutionMode(self._executor.mode.value), actual_fill_value,
-                already_locked=True,
-            )
-
-            await self._session.flush()
-
-            logger.info(
-                "pipeline_executed",
-                order_id=str(order.id),
-                position_id=str(position.id),
-                symbol=intent.symbol,
-                asset_class=asset_class,
-                fill_price=str(fill.price),
-                quantity=str(fill.quantity),
+                risk_amount=sizing.risk_amount,
                 correlation_id=correlation_id,
-            )
-
-            # Notify via Telegram
-            try:
-                from app.core.notifications import notifier
-                await notifier.notify_fill(
-                    symbol=intent.symbol,
-                    side=order.side,
-                    qty=str(fill.quantity),
-                    price=str(fill.price),
-                )
-            except Exception:
-                pass  # Never let notification failure break the pipeline
-
-            return PipelineResult(
-                action="EXECUTED",
-                order_id=order.id,
-                position_id=position.id,
-                details={
-                    "fill_price": str(fill.price),
-                    "quantity": str(fill.quantity),
-                    "slippage": str(fill.slippage),
-                    "risk_amount": str(sizing.risk_amount),
-                    "correlation_id": correlation_id,
-                },
+                already_locked=True,
+                risk_profile_type=active_profile,
             )
 
         except Exception as e:
@@ -445,6 +377,228 @@ class TradingPipeline:
                 correlation_id=correlation_id,
             )
             return PipelineResult(action="ERROR", reason=str(e))
+
+    async def execute_approved_order(
+        self,
+        order: Order,
+        market: MarketSnapshot,
+    ) -> PipelineResult:
+        """Execute an already-approved order (called by ApprovalExecutor).
+
+        Handles: balance check, guard validation, submit, fill, position, portfolio.
+        The order already passed risk/capital validation when it was created.
+        """
+        correlation_id = uuid4().hex
+
+        try:
+            # 1. Lock portfolio
+            portfolio = await self._lock_portfolio()
+            if portfolio is None:
+                logger.error("approval_no_portfolio", order_id=str(order.id))
+                order.status = OrderStatus.REJECTED.value
+                return PipelineResult(action="ERROR", reason="No portfolio found")
+
+            # 2. Re-check balance (may have changed since approval)
+            fill_value = order.requested_qty * order.requested_price
+            if portfolio.available_balance < fill_value:
+                logger.warning(
+                    "approval_insufficient_balance",
+                    order_id=str(order.id),
+                    available=str(portfolio.available_balance),
+                    required=str(fill_value),
+                )
+                order.status = OrderStatus.REJECTED.value
+                return PipelineResult(
+                    action="REJECTED",
+                    reason=f"Insufficient balance: available={portfolio.available_balance}, required={fill_value}",
+                )
+
+            # 3. Re-validate market conditions (guard)
+            guard_result = await self._guard.validate(
+                order_price=order.requested_price,
+                order_quantity=order.requested_qty,
+                market=market,
+                side=order.side,
+            )
+            if not guard_result.approved:
+                logger.warning(
+                    "approval_guard_rejected",
+                    order_id=str(order.id),
+                    reason=guard_result.reason,
+                )
+                order.status = OrderStatus.REJECTED.value
+                return PipelineResult(action="GUARD_REJECTED", reason=guard_result.reason)
+
+            quantity = guard_result.adjusted_quantity or order.requested_qty
+
+            await self._tracker.record_order_submitted(order.id, correlation_id)
+
+            asset_class = order.asset_class or AssetClass.CRYPTO.value
+
+            # 4-7. Submit, fill, position, portfolio update
+            return await self._submit_fill_position(
+                order=order,
+                quantity=quantity,
+                symbol=order.symbol,
+                side=OrderSide(order.side),
+                price=order.requested_price,
+                stop_loss=order.stop_loss,
+                take_profit=order.take_profit,
+                strategy_id=order.signal_id,
+                confidence=Decimal("0.7"),
+                asset_class=asset_class,
+                risk_amount=Decimal("0"),
+                correlation_id=correlation_id,
+                already_locked=True,
+                risk_profile_type=order.risk_profile_type,
+            )
+
+        except Exception as e:
+            logger.error(
+                "approval_execute_failed",
+                order_id=str(order.id),
+                error=str(e),
+            )
+            order.status = OrderStatus.REJECTED.value
+            return PipelineResult(action="ERROR", reason=str(e))
+
+    async def _submit_fill_position(
+        self,
+        *,
+        order: Order,
+        quantity: Decimal,
+        symbol: str,
+        side: OrderSide,
+        price: Decimal,
+        stop_loss: Decimal,
+        take_profit: Decimal,
+        strategy_id: UUID,
+        confidence: Decimal,
+        asset_class: str,
+        risk_amount: Decimal,
+        correlation_id: str,
+        already_locked: bool = True,
+        risk_profile_type: str = DEFAULT_PROFILE,
+    ) -> PipelineResult:
+        """Shared logic: submit to exchange, handle fill, create position, update portfolio.
+
+        Used by both execute() and execute_approved_order() to avoid duplication.
+        """
+        # Persist SUBMITTING state to DISK before sending to exchange.
+        # This is a real commit (not just flush) so it survives crashes.
+        order.status = OrderStatus.SUBMITTING.value
+        await self._session.commit()
+
+        fill = await retry_async(
+            self._executor.submit,
+            order_id=order.id,
+            symbol=symbol,
+            side=side,
+            quantity=quantity,
+            price=price,
+            max_retries=2,
+            base_delay=1.0,
+            max_delay=10.0,
+        )
+
+        # Handle fill (full or partial)
+        if fill.quantity >= quantity:
+            order.status = OrderStatus.FILLED.value
+        else:
+            order.status = OrderStatus.PARTIALLY_FILLED.value
+            logger.warning(
+                "partial_fill",
+                order_id=str(order.id),
+                requested=str(quantity),
+                filled=str(fill.quantity),
+            )
+
+        order.filled_qty = fill.quantity
+        order.avg_fill_price = fill.price
+        order.exchange_order_id = fill.exchange_order_id
+
+        await self._tracker.record_order_filled(
+            order.id, fill.price, fill.quantity, fill.slippage, correlation_id
+        )
+
+        # Create position (use ACTUAL fill qty, not requested)
+        position = await self._position_mgr.open_position(
+            fill=fill,
+            stop_loss=stop_loss,
+            take_profit=take_profit,
+            strategy_id=strategy_id,
+            signal_confidence=confidence,
+            execution_mode=self._executor.mode.value,
+            asset_class=asset_class,
+            risk_profile_type=risk_profile_type,
+        )
+
+        # Place exchange-level SL/TP for LIVE mode
+        if self._executor.mode == ExecutionMode.LIVE:
+            try:
+                from app.pipeline.execution.binance_executor import BinanceExecutor
+                if isinstance(self._executor, BinanceExecutor):
+                    oco_id = await self._executor.place_oco_order(
+                        symbol=symbol,
+                        quantity=fill.quantity,
+                        stop_loss=stop_loss,
+                        take_profit=take_profit,
+                    )
+                    if oco_id:
+                        position.oco_order_id = oco_id
+                        await self._session.flush()
+            except Exception as oco_err:
+                logger.error(
+                    "oco_placement_failed",
+                    position_id=str(position.id),
+                    error=str(oco_err),
+                )
+
+        # Update portfolio atomically via SQL UPDATE
+        actual_fill_value = fill.price * fill.quantity
+        portfolio_svc = PortfolioService(self._session)
+        await portfolio_svc.record_fill(
+            ExecutionMode(self._executor.mode.value), actual_fill_value,
+            already_locked=already_locked,
+        )
+
+        await self._session.flush()
+
+        logger.info(
+            "pipeline_executed",
+            order_id=str(order.id),
+            position_id=str(position.id),
+            symbol=symbol,
+            asset_class=asset_class,
+            fill_price=str(fill.price),
+            quantity=str(fill.quantity),
+            correlation_id=correlation_id,
+        )
+
+        # Notify via Telegram
+        try:
+            from app.core.notifications import notifier
+            await notifier.notify_fill(
+                symbol=symbol,
+                side=order.side,
+                qty=str(fill.quantity),
+                price=str(fill.price),
+            )
+        except Exception:
+            pass  # Never let notification failure break the pipeline
+
+        return PipelineResult(
+            action="EXECUTED",
+            order_id=order.id,
+            position_id=position.id,
+            details={
+                "fill_price": str(fill.price),
+                "quantity": str(fill.quantity),
+                "slippage": str(fill.slippage),
+                "risk_amount": str(risk_amount),
+                "correlation_id": correlation_id,
+            },
+        )
 
     async def _lock_portfolio(self) -> Portfolio | None:
         """Acquire row-level lock on portfolio."""

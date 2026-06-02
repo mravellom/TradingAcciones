@@ -163,3 +163,157 @@ async def test_execution_mode_from_position_not_monitor():
     call_args = mock_portfolio_svc.record_close.call_args
     assert call_args[0][0] == ExecutionMode.LIVE, \
         "record_close must use execution_mode from the position"
+
+
+# ── Exit Spread Validation ──
+
+
+@pytest.mark.asyncio
+async def test_exit_spread_too_wide_blocks_close():
+    """If spread exceeds threshold, the close should be deferred."""
+    mock_redis = AsyncMock()
+    mock_redis.set.return_value = True  # dedup passes
+    # Wide spread: bid=50000, ask=51000 → 2% spread (exceeds 1% crypto max)
+    mock_redis.hgetall.return_value = {
+        "price": "50500",
+        "bid": "50000",
+        "ask": "51000",
+        "timestamp": str(time.time()),
+    }
+    mock_redis.delete = AsyncMock()
+
+    mock_session = AsyncMock()
+    mock_pos_mgr = AsyncMock()
+    mock_portfolio_svc = AsyncMock()
+
+    position = _make_position()
+
+    with patch("app.tasks.position_monitor.get_redis", return_value=mock_redis):
+        monitor = PositionMonitor(
+            session_factory=AsyncMock(),
+            execution_mode=ExecutionMode.PAPER,
+        )
+        monitor._redis = mock_redis
+
+        await monitor._close_triggered(
+            mock_session, mock_pos_mgr, mock_portfolio_svc,
+            position, Decimal("49000"), "STOP_LOSS",
+        )
+
+    mock_pos_mgr.close_position.assert_not_called()
+    # Dedup key should be released for retry on next cycle
+    mock_redis.delete.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_exit_spread_ok_allows_close():
+    """If spread is within threshold, close should proceed."""
+    mock_redis = AsyncMock()
+    mock_redis.set.return_value = True  # dedup passes
+    # Tight spread: bid=50000, ask=50010 → 0.02% (well under 1%)
+    mock_redis.hgetall.return_value = {
+        "price": "50005",
+        "bid": "50000",
+        "ask": "50010",
+        "timestamp": str(time.time()),
+    }
+
+    mock_session = AsyncMock()
+    mock_pos_mgr = AsyncMock()
+    mock_portfolio_svc = AsyncMock()
+
+    trade = MagicMock()
+    trade.pnl = Decimal("-50")
+    mock_pos_mgr.close_position.return_value = trade
+
+    position = _make_position()
+
+    with patch("app.tasks.position_monitor.get_redis", return_value=mock_redis):
+        monitor = PositionMonitor(
+            session_factory=AsyncMock(),
+            execution_mode=ExecutionMode.PAPER,
+        )
+        monitor._redis = mock_redis
+
+        with patch("app.core.notifications.notifier", new=AsyncMock()):
+            await monitor._close_triggered(
+                mock_session, mock_pos_mgr, mock_portfolio_svc,
+                position, Decimal("49000"), "STOP_LOSS",
+            )
+
+    mock_pos_mgr.close_position.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_market_close_skips_spread_check():
+    """MARKET_CLOSE reason should always close, regardless of spread."""
+    mock_redis = AsyncMock()
+    mock_redis.set.return_value = True
+    # Wide spread (would normally block)
+    mock_redis.hgetall.return_value = {
+        "price": "50500",
+        "bid": "50000",
+        "ask": "51000",
+        "timestamp": str(time.time()),
+    }
+
+    mock_session = AsyncMock()
+    mock_pos_mgr = AsyncMock()
+    mock_portfolio_svc = AsyncMock()
+
+    trade = MagicMock()
+    trade.pnl = Decimal("-100")
+    mock_pos_mgr.close_position.return_value = trade
+
+    position = _make_position()
+
+    with patch("app.tasks.position_monitor.get_redis", return_value=mock_redis):
+        monitor = PositionMonitor(
+            session_factory=AsyncMock(),
+            execution_mode=ExecutionMode.PAPER,
+        )
+        monitor._redis = mock_redis
+
+        with patch("app.core.notifications.notifier", new=AsyncMock()):
+            await monitor._close_triggered(
+                mock_session, mock_pos_mgr, mock_portfolio_svc,
+                position, Decimal("49000"), "MARKET_CLOSE",
+            )
+
+    mock_pos_mgr.close_position.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_exit_spread_no_bid_ask_allows_close():
+    """If bid/ask data is missing, close should proceed (safety first)."""
+    mock_redis = AsyncMock()
+    mock_redis.set.return_value = True
+    mock_redis.hgetall.return_value = {
+        "price": "50000",
+        "timestamp": str(time.time()),
+    }
+
+    mock_session = AsyncMock()
+    mock_pos_mgr = AsyncMock()
+    mock_portfolio_svc = AsyncMock()
+
+    trade = MagicMock()
+    trade.pnl = Decimal("50")
+    mock_pos_mgr.close_position.return_value = trade
+
+    position = _make_position()
+
+    with patch("app.tasks.position_monitor.get_redis", return_value=mock_redis):
+        monitor = PositionMonitor(
+            session_factory=AsyncMock(),
+            execution_mode=ExecutionMode.PAPER,
+        )
+        monitor._redis = mock_redis
+
+        with patch("app.core.notifications.notifier", new=AsyncMock()):
+            await monitor._close_triggered(
+                mock_session, mock_pos_mgr, mock_portfolio_svc,
+                position, Decimal("52000"), "TAKE_PROFIT",
+            )
+
+    mock_pos_mgr.close_position.assert_called_once()

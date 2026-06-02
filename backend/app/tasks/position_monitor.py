@@ -20,6 +20,9 @@ logger = get_logger(__name__)
 DEFAULT_CHECK_INTERVAL = 2  # seconds
 MAX_PRICE_STALE_SECONDS = 15  # reject prices older than this
 CLOSE_DEDUP_TTL = 30  # Redis dedup key TTL
+# Max acceptable spread for exit orders (per asset class)
+EXIT_MAX_SPREAD_PCT_CRYPTO = Decimal("0.01")  # 1%
+EXIT_MAX_SPREAD_PCT_STOCKS = Decimal("0.005")  # 0.5%
 
 
 class PositionMonitor:
@@ -139,11 +142,35 @@ class PositionMonitor:
 
             await session.commit()
 
+    async def _check_exit_spread(self, symbol: str, asset_class: str) -> str | None:
+        """Check if spread is acceptable for closing. Returns warning or None."""
+        cached = await self._redis.hgetall(f"price:{symbol}")
+        if not cached or "bid" not in cached or "ask" not in cached:
+            return None  # No spread data — allow close (safety first)
+
+        try:
+            bid = Decimal(cached["bid"])
+            ask = Decimal(cached["ask"])
+            if bid <= 0:
+                return None
+            spread = (ask - bid) / bid
+            max_spread = (
+                EXIT_MAX_SPREAD_PCT_STOCKS
+                if asset_class == AssetClass.STOCKS.value
+                else EXIT_MAX_SPREAD_PCT_CRYPTO
+            )
+            if spread > max_spread:
+                return f"Exit spread {spread:.2%} exceeds max {max_spread:.2%}"
+        except (ArithmeticError, ValueError):
+            return None  # Unparseable data — allow close
+
+        return None
+
     async def _close_triggered(
         self, session, pos_mgr, portfolio_svc, position,
         current_price: Decimal, reason: str,
     ) -> None:
-        """Close a position with deduplication guard."""
+        """Close a position with deduplication guard and spread check."""
         dedup_key = f"closing:{position.id}"
 
         # Deduplication: only one close per position within TTL window
@@ -155,6 +182,22 @@ class PositionMonitor:
                 reason=reason,
             )
             return
+
+        # Check spread before closing (skip for MARKET_CLOSE — must exit regardless)
+        if reason != "MARKET_CLOSE":
+            asset_class = getattr(position, "asset_class", "CRYPTO")
+            spread_warning = await self._check_exit_spread(position.symbol, asset_class)
+            if spread_warning:
+                logger.warning(
+                    "exit_spread_too_wide",
+                    position_id=str(position.id),
+                    symbol=position.symbol,
+                    reason=reason,
+                    detail=spread_warning,
+                )
+                # Release dedup key so next cycle can retry
+                await self._redis.delete(dedup_key)
+                return
 
         log_fn = logger.warning if reason == "STOP_LOSS" else logger.info
         log_fn(

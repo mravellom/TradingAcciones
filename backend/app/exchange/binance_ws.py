@@ -13,7 +13,8 @@ from app.exchange.base import PriceTick
 logger = get_logger(__name__)
 
 BINANCE_WS_URL = "wss://stream.binance.com:9443/ws"
-BINANCE_TESTNET_WS_URL = "wss://testnet.binance.vision/ws"
+# Market data streams are public — always use production for reliable feeds
+BINANCE_TESTNET_WS_URL = "wss://stream.binance.com:9443/ws"
 
 MAX_RECONNECT_DELAY = 60  # seconds
 
@@ -90,13 +91,17 @@ class BinanceWebSocket:
         logger.info("binance_ws_stopped")
 
     async def _connect_and_listen(self) -> None:
-        streams = "/".join(self._subscriptions)
-        if not streams:
+        if not self._subscriptions:
             logger.warning("binance_ws_no_subscriptions")
             await asyncio.sleep(5)
             return
 
-        url = f"{self._base_url}/{streams}"
+        # Single stream: /ws/<stream>  |  Multiple: /stream?streams=<s1>/<s2>
+        if len(self._subscriptions) == 1:
+            url = f"{self._base_url}/{next(iter(self._subscriptions))}"
+        else:
+            streams = "/".join(self._subscriptions)
+            url = f"{self._base_url.replace('/ws', '/stream')}?streams={streams}"
         logger.info("binance_ws_connecting", url=url)
 
         async with websockets.connect(url, ping_interval=20) as ws:
@@ -118,7 +123,14 @@ class BinanceWebSocket:
             logger.warning("binance_ws_invalid_json", raw=raw_msg[:200])
             return
 
+        # Combined streams wrap payload in {"stream": ..., "data": {...}}
+        if "stream" in data and "data" in data:
+            data = data["data"]
+
+        # bookTicker may arrive without "e" field — detect by presence of "b"/"a"/"s"
         event_type = data.get("e")
+        if event_type is None and "s" in data and "b" in data and "a" in data:
+            event_type = "bookTicker"
 
         if event_type == "bookTicker":
             tick = PriceTick(

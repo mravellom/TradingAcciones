@@ -19,7 +19,7 @@ from sqlalchemy.orm import selectinload
 from app.config import settings
 from app.core.logging import get_logger
 from app.core.redis import get_redis
-from app.domain.enums import AssetClass, SignalType
+from app.domain.enums import AssetClass, ExecutionMode, SignalType
 from app.models.order import Order
 from app.models.risk_config import RiskConfig
 from app.models.signal import Signal
@@ -27,9 +27,11 @@ from app.pipeline.capital_manager.capital_manager import CapitalManager
 from app.pipeline.execution.base import BaseExecutor
 from app.pipeline.execution.guard import ExecutionGuard, MarketSnapshot
 from app.pipeline.orchestrator import TradingPipeline
+from app.pipeline.position_manager.position_manager import PositionManager
 from app.pipeline.risk_manager.risk_manager import RiskManager
 from app.pipeline.strategy.base import TradeIntent
 from app.services.market_data import MarketDataService
+from app.services.portfolio_service import PortfolioService
 
 logger = get_logger(__name__)
 
@@ -99,14 +101,13 @@ class SignalExecutor:
         from datetime import datetime, timezone
 
         async with self._session_factory() as session:
-            # Find BUY signals that have no linked order and haven't expired.
-            # SELL signals are skipped because the position model only supports LONG.
+            # Find BUY and SELL signals that have no linked order and haven't expired.
             order_subq = select(Order.signal_id).where(Order.signal_id.isnot(None)).scalar_subquery()
             stmt = (
                 select(Signal)
                 .where(
                     and_(
-                        Signal.signal_type == "BUY",
+                        Signal.signal_type.in_(["BUY", "SELL"]),
                         Signal.expires_at > datetime.now(timezone.utc),
                         Signal.id.notin_(order_subq),
                     )
@@ -124,7 +125,10 @@ class SignalExecutor:
         risk_mgr, capital_mgr = await self._load_pipeline_config()
 
         for signal in pending_signals:
-            await self._execute_signal(signal, risk_mgr, capital_mgr)
+            if signal.signal_type == "SELL":
+                await self._execute_sell_signal(signal)
+            else:
+                await self._execute_signal(signal, risk_mgr, capital_mgr)
 
     async def _execute_signal(
         self,
@@ -179,6 +183,10 @@ class SignalExecutor:
 
                 pipeline_result = await pipeline.execute(intent, market)
 
+                # Commit the transaction — the orchestrator only flushes,
+                # expecting the caller to commit (see orchestrator.py line 101).
+                await session.commit()
+
                 logger.info(
                     "signal_executor_result",
                     signal_id=str(signal.id),
@@ -193,6 +201,65 @@ class SignalExecutor:
         except Exception as e:
             logger.error(
                 "signal_executor_failed",
+                signal_id=str(signal.id),
+                symbol=signal.symbol,
+                error=str(e),
+            )
+
+    async def _execute_sell_signal(self, signal: Signal) -> None:
+        """Close open LONG positions for the symbol when a SELL signal arrives."""
+        try:
+            async with self._session_factory() as session:
+                pos_mgr = PositionManager(session)
+                portfolio_svc = PortfolioService(session)
+
+                open_positions = await pos_mgr.get_open_by_symbol(signal.symbol)
+                if not open_positions:
+                    logger.info(
+                        "sell_signal_no_positions",
+                        signal_id=str(signal.id),
+                        symbol=signal.symbol,
+                    )
+                    return
+
+                # Get current market price for exit
+                try:
+                    snapshot = await self._market_data.get_market_snapshot(signal.symbol)
+                    exit_price = snapshot["price"]
+                except Exception as e:
+                    logger.warning(
+                        "sell_signal_market_data_failed",
+                        signal_id=str(signal.id),
+                        symbol=signal.symbol,
+                        error=str(e),
+                    )
+                    return
+
+                for position in open_positions:
+                    trade = await pos_mgr.close_position(
+                        position_id=position.id,
+                        exit_price=exit_price,
+                        reason="SELL_SIGNAL",
+                    )
+                    position_value = position.entry_price * position.quantity
+                    await portfolio_svc.record_close(
+                        ExecutionMode(position.execution_mode),
+                        position_value,
+                        trade.pnl,
+                    )
+                    logger.info(
+                        "sell_signal_closed_position",
+                        signal_id=str(signal.id),
+                        position_id=str(position.id),
+                        symbol=signal.symbol,
+                        pnl=str(trade.pnl),
+                    )
+
+                await session.commit()
+
+        except Exception as e:
+            logger.error(
+                "sell_signal_execution_failed",
                 signal_id=str(signal.id),
                 symbol=signal.symbol,
                 error=str(e),

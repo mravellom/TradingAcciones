@@ -80,6 +80,22 @@ async def lifespan(app: FastAPI):
             alpaca_client = None
             alpaca_ws = None
 
+    # Initialize Binance WebSocket for crypto price feeds
+    binance_ws = None
+    binance_ws_task = None
+    try:
+        from app.exchange.binance_ws import BinanceWebSocket
+
+        binance_ws = BinanceWebSocket(testnet=settings.binance_testnet)
+        crypto_symbols = ["BTCUSDT", "ETHUSDT"]
+        for sym in crypto_symbols:
+            await binance_ws.subscribe_ticker(sym)
+        binance_ws_task = asyncio.create_task(binance_ws.start())
+        logger.info("binance_ws_started", symbols=crypto_symbols)
+    except Exception as e:
+        logger.error("binance_ws_startup_failed", error=str(e))
+        binance_ws = None
+
     # Store alpaca_client in app state for dependency injection
     app_instance = app  # type: ignore
     app_instance.state.alpaca_client = alpaca_client
@@ -271,6 +287,19 @@ async def lifespan(app: FastAPI):
             pass
     if background_tasks:
         logger.info("background_tasks_stopped", count=len(background_tasks))
+
+    # Stop Binance WebSocket
+    if binance_ws_task is not None and binance_ws is not None:
+        try:
+            await binance_ws.stop()
+            binance_ws_task.cancel()
+            try:
+                await binance_ws_task
+            except asyncio.CancelledError:
+                pass
+            logger.info("binance_ws_stopped")
+        except Exception:
+            pass
 
     # Stop Alpaca WebSocket
     if alpaca_ws_task is not None and alpaca_ws is not None:

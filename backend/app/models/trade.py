@@ -31,6 +31,9 @@ class Trade(Base, UUIDPrimaryKeyMixin):
     strategy_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
 
     execution_mode: Mapped[str] = mapped_column(String(10), nullable=False)
+    risk_profile_type: Mapped[str] = mapped_column(
+        String(30), nullable=False, server_default=text("'ULTRA_CONSERVADOR'")
+    )
     duration_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
 
     opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

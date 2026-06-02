@@ -50,6 +50,43 @@ async def get_per_strategy(
     return await svc.get_per_strategy_performance(asset_class)
 
 
+@router.get("/advanced-summary")
+async def get_advanced_summary(
+    asset_class: str | None = Query(None, pattern="^(CRYPTO|STOCKS)$"),
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Get summary with profit factor, expectancy, max drawdown, trade frequency."""
+    svc = AnalyticsService(db)
+    return await svc.get_advanced_summary(asset_class)
+
+
+@router.get("/per-profile")
+async def get_per_profile(
+    asset_class: str | None = Query(None, pattern="^(CRYPTO|STOCKS)$"),
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Get performance breakdown by risk profile (ULTRA_CONSERVADOR vs DEFENSIVO_AGRESIVO)."""
+    svc = AnalyticsService(db)
+    return await svc.get_per_profile_performance(asset_class)
+
+
+@router.get("/per-symbol")
+async def get_per_symbol(
+    asset_class: str | None = Query(None, pattern="^(CRYPTO|STOCKS)$"),
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Get performance breakdown by symbol."""
+    svc = AnalyticsService(db)
+    return await svc.get_per_symbol_performance(asset_class)
+
+
+@router.get("/profile-comparison")
+async def get_profile_comparison(db: AsyncSession = Depends(get_db_session)):
+    """Direct side-by-side comparison of ULTRA_CONSERVADOR vs DEFENSIVO_AGRESIVO."""
+    svc = AnalyticsService(db)
+    return await svc.get_profile_comparison()
+
+
 @router.get("/paper-vs-live")
 async def get_paper_vs_live(db: AsyncSession = Depends(get_db_session)):
     """Compare paper trading vs live trading performance metrics."""

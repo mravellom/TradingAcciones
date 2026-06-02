@@ -8,3 +8,5 @@ __pycache__
 .gitignore
 tests/
 *.md
+.venv
+*.egg-info

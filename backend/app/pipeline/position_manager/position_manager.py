@@ -38,6 +38,7 @@ class PositionManager:
         signal_confidence: Decimal,
         execution_mode: str = "PAPER",
         asset_class: str = "CRYPTO",
+        risk_profile_type: str = "ULTRA_CONSERVADOR",
     ) -> Position:
         """Create a new position from a fill."""
         position = Position(
@@ -56,6 +57,7 @@ class PositionManager:
             unrealized_pnl=Decimal("0"),
             realized_pnl=Decimal("0"),
             execution_mode=execution_mode,
+            risk_profile_type=risk_profile_type,
             opened_at=fill.timestamp,
         )
         await self._repo.create(position)
@@ -133,6 +135,7 @@ class PositionManager:
             signal_confidence=position.signal_confidence,
             strategy_id=position.strategy_id,
             execution_mode=position.execution_mode,
+            risk_profile_type=position.risk_profile_type,
             duration_seconds=duration,
             opened_at=position.opened_at,
             closed_at=now,
